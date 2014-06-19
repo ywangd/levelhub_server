@@ -9,11 +9,11 @@ if 'REDISCLOUD_URL' in os.environ and 'REDISCLOUD_PORT' in os.environ and 'REDIS
      packages.append('django-redis-cache')
      packages.append('hiredis')
 
-setup(name='YourAppName',
-      version='1.0',
-      description='OpenShift App',
-      author='Your Name',
-      author_email='example@example.com',
+setup(name='LevelHub',
+      version='0.1',
+      description='LevelHub server side app',
+      author='ywangd',
+      author_email='ywangd@gmail.com',
       url='https://pypi.python.org/pypi',
       install_requires=packages,
 )
