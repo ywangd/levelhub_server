@@ -1,5 +1,5 @@
 """
-Django settings for openshift project.
+Django settings for levelhub project.
 
 For more information on this file, see
 https://docs.djangoproject.com/en/1.6/topics/settings/

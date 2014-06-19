@@ -1,5 +1,5 @@
 """
-WSGI config for openshift project.
+WSGI config for levelhub project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
@@ -12,7 +12,7 @@ import sys
 os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
 
 if os.environ.has_key('OPENSHIFT_REPO_DIR'):
-     sys.path.append(os.path.join(os.environ['OPENSHIFT_REPO_DIR'], 'wsgi', 'openshift'))
+     sys.path.append(os.path.join(os.environ['OPENSHIFT_REPO_DIR'], 'wsgi', 'levelhub'))
      virtenv = os.environ['OPENSHIFT_PYTHON_DIR'] + '/virtenv/'
      os.environ['PYTHON_EGG_CACHE'] = os.path.join(virtenv, 'lib/python2.7/site-packages')
      virtualenv = os.path.join(virtenv, 'bin/activate_this.py')
