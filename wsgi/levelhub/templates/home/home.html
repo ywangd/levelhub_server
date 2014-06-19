@@ -3,20 +3,32 @@
 
 <head>
 
+     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+
 </head>
 
 <body>
-
-<b>Runnign with Django {{ version }} !</b>
-<br/>
-let's <a href="/admin">admin </a>
-<br/>
+<div>
+    <b>Running with Django {{ version }} !</b>
+</div>
 
 <div>
-    <p>
-        <a href="m/register">Register</a>
-    </p>
+    user is [{{ user }}]
 </div>
+
+{% if user.is_authenticated %}
+    <p>
+        let's <a href="/admin/">admin </a>
+    </p>
+    <p><a href="/logout/">logout</a></p>
+{% else %}
+    <p>
+        <a href="/register/">Register</a>
+        <a href="/login/">login</a>
+    </p>
+
+{% endif %}
+
 
 </body>
 
