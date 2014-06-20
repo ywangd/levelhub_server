@@ -129,3 +129,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 STATIC_ROOT = os.path.join(BASE_DIR, '..', 'static')
 STATIC_URL = '/static/'
+
+# session related settings
+SESSION_COOKIE_HTTPONLY = False
+SESSION_COOKIE_AGE = 315360000 # 10 years

@@ -23,8 +23,6 @@ def add_header(func):
 
 
 def home(request):
-    context = RequestContext(request)
-
     return render(request, 'home/home.html', {"version": django.VERSION})
 
 
