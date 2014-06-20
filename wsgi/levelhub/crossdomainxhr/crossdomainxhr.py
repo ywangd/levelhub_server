@@ -32,8 +32,10 @@ class XsSharing(object):
 
         if 'HTTP_ORIGIN' in request.META:
             origin = request.META['HTTP_ORIGIN']
-        else:
+        elif 'HTTP_X_CLIENT_IP' in request.META:
             origin = request.META['HTTP_X_CLIENT_IP']
+        else:
+            origin = request.META['HTTP_HOST']
 
         if 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' in request.META:
             response = http.HttpResponse()
@@ -58,8 +60,10 @@ class XsSharing(object):
 
         if 'HTTP_ORIGIN' in request.META:
             origin = request.META['HTTP_ORIGIN']
-        else:
+        elif 'HTTP_X_CLIENT_IP' in request.META:
             origin = request.META['HTTP_X_CLIENT_IP']
+        else:
+            origin = request.META['HTTP_HOST']
 
         response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
         response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
