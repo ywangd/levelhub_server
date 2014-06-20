@@ -11,6 +11,10 @@ def add_header(func):
     def func_header_added(request):
         response = func(request)
         response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Max-Age'] = '120'
+        response['Access-Control-Allow-Credentials'] = 'true'
+        response['Access-Control-Allow-Methods'] = 'HEAD, GET, OPTIONS, POST, DELETE'
+        response['Access-Control-Allow-Headers'] = 'origin, content-type, accept, x-requested-with'
         return response
     return func_header_added
 
