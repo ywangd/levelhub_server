@@ -65,7 +65,7 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'crossdomainxhr.crossdomainxhr.XsSharing',
+    #'crossdomainxhr.crossdomainxhr.XsSharing',
 )
 
 # If you want configure the REDISCLOUD
