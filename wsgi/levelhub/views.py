@@ -69,7 +69,8 @@ def user_login(request):
         if user:
             l = login(request, user)
             print "login: ", l
-            return HttpResponseRedirect('/')
+            #return HttpResponseRedirect('/')
+            return HttpResponse("You are now logged in as " + str(user))
         else:
             return HttpResponse("Invalid login details")
 
