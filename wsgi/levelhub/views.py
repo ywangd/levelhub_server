@@ -19,7 +19,6 @@ def add_header(func):
     return func_header_added
 
 
-@add_header
 def home(request):
     context = RequestContext(request)
 
@@ -31,7 +30,6 @@ def home(request):
     return render(request, 'home/home.html', {"version": django.VERSION})
 
 
-@add_header
 def register(request):
     registered = False
 
@@ -60,7 +58,6 @@ def register(request):
     )
 
 
-@add_header
 def user_login(request):
     if request.method == 'POST':
         print "HERE ", request.COOKIES
