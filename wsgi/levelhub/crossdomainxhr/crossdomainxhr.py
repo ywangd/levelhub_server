@@ -25,11 +25,10 @@ class XsSharing(object):
     """
 
     def process_request(self, request):
-        print request.get_host()
 
         if 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' in request.META:
             response = http.HttpResponse()
-            response['Access-Control-Allow-Origin'] = 'http://localhost:8000'  # XS_SHARING_ALLOWED_ORIGINS
+            response['Access-Control-Allow-Origin'] = 'http://' + request.get_host()  # XS_SHARING_ALLOWED_ORIGINS
             response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
             response['Access-Control-Allow-Credentials'] = 'true'
 
@@ -42,7 +41,7 @@ class XsSharing(object):
         if response.has_header('Access-Control-Allow-Origin'):
             return response
 
-        response['Access-Control-Allow-Origin'] = 'http://localhost:8000'  # XS_SHARING_ALLOWED_ORIGINS
+        response['Access-Control-Allow-Origin'] = 'http://' + request.get_host()  # XS_SHARING_ALLOWED_ORIGINS
         response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
         response['Access-Control-Allow-Credentials'] = 'true'
 
