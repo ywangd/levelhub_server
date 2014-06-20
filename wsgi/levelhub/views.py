@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import render_to_response, render
 from django.template import RequestContext
+from django.views.decorators.csrf import csrf_exempt
 
 from forms import UserForm
 
@@ -30,6 +31,7 @@ def home(request):
     return render(request, 'home/home.html', {"version": django.VERSION})
 
 
+@csrf_exempt
 def register(request):
     registered = False
 
@@ -58,6 +60,7 @@ def register(request):
     )
 
 
+@csrf_exempt
 def user_login(request):
     if request.method == 'POST':
         print "HERE ", request.COOKIES
