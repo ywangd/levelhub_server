@@ -131,5 +131,5 @@ STATIC_ROOT = os.path.join(BASE_DIR, '..', 'static')
 STATIC_URL = '/static/'
 
 # session related settings
-SESSION_COOKIE_HTTPONLY = False
+# SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_AGE = 315360000 # 10 years
