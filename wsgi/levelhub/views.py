@@ -65,9 +65,8 @@ def user_login(request):
 
         if user:
             login(request, user)
-            #return HttpResponseRedirect('/')
-            return HttpResponse(json.dumps({"user": str(user)}),
-                                content_type="application/json")
+            return HttpResponseRedirect('/')
+            #return HttpResponse(json.dumps({"user": str(user)}), content_type="application/json")
         else:
             return HttpResponse("Invalid login details")
 
