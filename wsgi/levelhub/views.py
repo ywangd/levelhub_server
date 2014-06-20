@@ -25,11 +25,6 @@ def add_header(func):
 def home(request):
     context = RequestContext(request)
 
-    print 'COOKIES', request.COOKIES
-    print 'context', context
-    print request.session.keys()
-    print request.user
-
     return render(request, 'home/home.html', {"version": django.VERSION})
 
 
@@ -43,9 +38,7 @@ def register(request):
         if user_form.is_valid():
             user = user_form.save()
 
-            print user.password
             user.set_password(user.password)
-            print user.password
             user.save()
 
             registered = True
@@ -65,15 +58,13 @@ def register(request):
 @csrf_exempt
 def user_login(request):
     if request.method == 'POST':
-        print "HERE ", request.COOKIES
         username = request.POST['username']
         password = request.POST['password']
 
         user = authenticate(username=username, password=password)
 
         if user:
-            l = login(request, user)
-            print "login: ", l
+            login(request, user)
             #return HttpResponseRedirect('/')
             return HttpResponse(json.dumps({"user": str("user")}),
                                 content_type="application/json")
