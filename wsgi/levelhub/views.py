@@ -1,3 +1,5 @@
+import json
+
 import django
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -73,7 +75,8 @@ def user_login(request):
             l = login(request, user)
             print "login: ", l
             #return HttpResponseRedirect('/')
-            return HttpResponse("You are now logged in as " + str(user))
+            return HttpResponse(json.dumps({"user": str("user")}),
+                                content_type="application/json")
         else:
             return HttpResponse("Invalid login details")
 
