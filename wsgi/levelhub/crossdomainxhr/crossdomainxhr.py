@@ -30,9 +30,14 @@ class XsSharing(object):
             if key.startswith("HTTP"):
                 headers += key + '=' + str(request.META[key]) + ';'
 
+        if 'HTTP_ORIGIN' in request.META:
+            origin = request.META['HTTP_ORIGIN']
+        else:
+            origin = request.META['HTTP_X_CLIENT_IP']
+
         if 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' in request.META:
             response = http.HttpResponse()
-            response['Access-Control-Allow-Origin'] = request.META['HTTP_ORIGIN']  # XS_SHARING_ALLOWED_ORIGINS
+            response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
             response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
             response['Access-Control-Allow-Credentials'] = 'true'
             response['headers'] = headers
@@ -51,7 +56,12 @@ class XsSharing(object):
             if key.startswith("HTTP"):
                 headers += key + '=' + str(request.META[key]) + ';'
 
-        response['Access-Control-Allow-Origin'] = request.META['HTTP_ORIGIN']  # XS_SHARING_ALLOWED_ORIGINS
+        if 'HTTP_ORIGIN' in request.META:
+            origin = request.META['HTTP_ORIGIN']
+        else:
+            origin = request.META['HTTP_X_CLIENT_IP']
+
+        response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
         response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
         response['Access-Control-Allow-Credentials'] = 'true'
         response['headers'] = headers
