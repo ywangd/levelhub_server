@@ -25,10 +25,6 @@ class XsSharing(object):
     """
 
     def process_request(self, request):
-        headers = ''
-        for key in request.META.keys():
-            if key.startswith("HTTP"):
-                headers += key + '=' + str(request.META[key]) + ';'
 
         if 'HTTP_ORIGIN' in request.META:
             origin = request.META['HTTP_ORIGIN']
@@ -42,7 +38,6 @@ class XsSharing(object):
             response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
             response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
             response['Access-Control-Allow-Credentials'] = 'true'
-            response['headers'] = headers
 
             return response
 
@@ -52,11 +47,6 @@ class XsSharing(object):
         # Avoid unnecessary work
         if response.has_header('Access-Control-Allow-Origin'):
             return response
-
-        headers = ''
-        for key in request.META.keys():
-            if key.startswith("HTTP"):
-                headers += key + '=' + str(request.META[key]) + ';'
 
         if 'HTTP_ORIGIN' in request.META:
             origin = request.META['HTTP_ORIGIN']
@@ -68,6 +58,5 @@ class XsSharing(object):
         response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
         response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
         response['Access-Control-Allow-Credentials'] = 'true'
-        response['headers'] = headers
 
         return response
