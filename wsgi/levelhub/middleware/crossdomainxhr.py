@@ -47,6 +47,8 @@ class XsSharing(object):
 
     def process_response(self, request, response):
 
+        print sorted(request.META.keys())
+
         if "Access-Control-Allow-Headers" in response:
             print "allow headers: ", response['Access-Control-Allow-Headers']
         else:
