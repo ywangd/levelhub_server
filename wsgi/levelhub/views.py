@@ -10,8 +10,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from forms import UserForm
 
-def from_mobile_app(request):
-    if "mobileapp" in request.POST or "mobileapp" in request.GET:
+def is_json_request(request):
+    if "json" in request.POST or "json" in request.GET:
         return True
     else:
         return False
@@ -61,6 +61,8 @@ def register(request):
 
 @csrf_exempt
 def user_login(request):
+    jq = is_json_request(request)
+    
     if request.method == 'POST':
         username = request.POST['username']
         password = request.POST['password']
@@ -69,19 +71,30 @@ def user_login(request):
 
         if user:
             login(request, user)
-            if from_mobile_app(request):
-                return HttpResponse(json.dumps({"user": str(user), "sessionid": request.session.session_key}),
+            if jq:
+                return HttpResponse(json.dumps({"user": str(user),
+                                                "sessionid": request.session.session_key}),
                                     content_type="application/json")
             else:
                 return HttpResponseRedirect('/')
         else:
-            return HttpResponse("Invalid login details")
+            if jq:
+                return HttpResponse(json.dumps({"err": "Invalid login"}),
+                                    content_type="application/json")
+
+            return HttpResponse("Invalid login")
 
     else:
         return render(request, 'home/login.html', {})
 
 
 @login_required
+@csrf_exempt
 def user_logout(request):
+    print "logging out ..."
     logout(request)
-    return HttpResponseRedirect('/')
+    if is_json_request(request):
+        return HttpResponse(json.dumps({}),
+                            content_type="application/json")
+    else:
+        return HttpResponseRedirect('/')
