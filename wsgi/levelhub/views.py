@@ -10,7 +10,11 @@ from django.views.decorators.csrf import csrf_exempt
 
 from forms import UserForm
 
-MOBILE_APP_CLIENT = "MOBILE_APP"
+def from_mobile_app(request):
+    if "mobileapp" in request.POST or "mobileapp" in request.GET:
+        return True
+    else:
+        return False
 
 def add_header(func):
     def func_header_added(request):
@@ -67,7 +71,7 @@ def user_login(request):
             login(request, user)
             cookies = dict(x.strip().split("=") for x in request.META["HTTP_COOKIE"].split(";"))
             print cookies
-            if MOBILE_APP_CLIENT in request.META:
+            if from_mobile_app(request):
                 return HttpResponse(json.dumps({"user": str(user), "cookies": cookies}),
                                     content_type="application/json")
             else:
