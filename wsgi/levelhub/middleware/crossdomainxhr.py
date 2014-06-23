@@ -45,8 +45,6 @@ class XsSharing(object):
 
     def process_response(self, request, response):
 
-        print sorted(request.META.keys())
-
         # Avoid unnecessary work
         if response.has_header('Access-Control-Allow-Origin'):
             return response

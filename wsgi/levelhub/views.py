@@ -69,10 +69,8 @@ def user_login(request):
 
         if user:
             login(request, user)
-            cookies = dict(x.strip().split("=") for x in request.META["HTTP_COOKIE"].split(";"))
-            print cookies
             if from_mobile_app(request):
-                return HttpResponse(json.dumps({"user": str(user), "cookies": cookies}),
+                return HttpResponse(json.dumps({"user": str(user), "sessionid": request.session.session_key}),
                                     content_type="application/json")
             else:
                 return HttpResponseRedirect('/')
