@@ -9,6 +9,7 @@ from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
 from forms import UserForm
+from testpylib import testvar
 
 def add_header(func):
     def func_header_added(request):
@@ -23,6 +24,7 @@ def add_header(func):
 
 
 def home(request):
+    print testvar
     return render(request, 'home/home.html', {"version": django.VERSION})
 
 
