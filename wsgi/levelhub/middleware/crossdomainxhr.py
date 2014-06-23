@@ -47,7 +47,7 @@ class XsSharing(object):
 
     def process_response(self, request, response):
 
-        if "Access-Control-Allow-Headers" in response['Access-Control-Allow-Headers']:
+        if "Access-Control-Allow-Headers" in response:
             print "allow headers: ", response['Access-Control-Allow-Headers']
         else:
             print "NO allow headers"
