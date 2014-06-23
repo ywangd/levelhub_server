@@ -33,7 +33,7 @@ class XsSharing(object):
         else:
             origin = request.META['HTTP_HOST']
 
-        print "request headers: ", request.META["ACCESS_CONTROL_REQUEST_HEADERS"]
+        print "request headers: ", request.META["HTTP_ACCESS_CONTROL_REQUEST_HEADERS"]
 
         if 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' in request.META:
             response = http.HttpResponse()
@@ -53,7 +53,7 @@ class XsSharing(object):
             print "allow headers: ", response['Access-Control-Allow-Headers']
         else:
             print "NO allow headers"
-            response['Access-Control-Allow-Headers'] = request.META["ACCESS_CONTROL_REQUEST_HEADERS"]
+            response['Access-Control-Allow-Headers'] = request.META["HTTP_ACCESS_CONTROL_REQUEST_HEADERS"]
 
         # Avoid unnecessary work
         if response.has_header('Access-Control-Allow-Origin'):
