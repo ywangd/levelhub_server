@@ -5,3 +5,4 @@ def utcnow():
 
 def now():
     return datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+
