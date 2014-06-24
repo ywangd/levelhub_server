@@ -10,11 +10,13 @@ from django.views.decorators.csrf import csrf_exempt
 
 from forms import UserForm
 
+
 def is_json_request(request):
     if "json" in request.POST or "json" in request.GET:
         return True
     else:
         return False
+
 
 def add_header(func):
     def func_header_added(request):
@@ -25,6 +27,7 @@ def add_header(func):
         response['Access-Control-Allow-Methods'] = 'HEAD, GET, OPTIONS, POST, DELETE'
         response['Access-Control-Allow-Headers'] = 'origin, content-type, accept, x-requested-with'
         return response
+
     return func_header_added
 
 
@@ -34,36 +37,47 @@ def home(request):
 
 @csrf_exempt
 def register(request):
-    registered = False
 
     if request.method == 'POST':
+        jq = is_json_request(request)
         user_form = UserForm(data=request.POST)
 
         if user_form.is_valid():
             user = user_form.save()
-
-            user.set_password(user.password)
+            password = user.password
+            user.set_password(password)
             user.save()
-
-            registered = True
-
+            user = authenticate(username=user.username, password=password)
+            login(request, user)
+            if jq:
+                return HttpResponse(json.dumps({"user": user.username,
+                                                "sessionid": request.session.session_key}))
+            else:
+                return HttpResponseRedirect('/')
         else:
-            print "user_form.errors", user_form.errors
+
+            if jq:
+                err = {}
+                for field in user_form:
+                    if len(field.errors) > 0:
+                        err[field.html_name] = field.errors[0]
+                return HttpResponse(json.dumps({"err": err}))
+            else:
+                print "user_form.errors", user_form.errors
 
     else:
         user_form = UserForm()
 
     return render(request,
                   'home/register.html',
-                  {'user_form': user_form, 'registered': registered}
-    )
+                  {'user_form': user_form})
 
 
 @csrf_exempt
 def user_login(request):
-    jq = is_json_request(request)
-    
+
     if request.method == 'POST':
+        jq = is_json_request(request)
         username = request.POST['username']
         password = request.POST['password']
 

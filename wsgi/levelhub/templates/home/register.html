@@ -7,7 +7,7 @@
 
 <body>
 
-{% if registered %}
+{% if user.is_authenticated %}
 
     <p>Registered!</p>
     <a href="/">go Home</a>
