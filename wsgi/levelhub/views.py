@@ -116,7 +116,7 @@ def user_logout(request):
 def debug_reset_db(request):
     if request.method == 'POST':
         User.objects.exclude(username='admin').delete()
-        user = User(username='test')
+        user = User(username='test', email='test@test.com', first_name='first', last_name='last')
         user.set_password('test')
         user.save()
 
@@ -144,11 +144,15 @@ def debug_reset_db(request):
                                           use_time='2014-06-22 15:30:00' if i < 3 else None) for i in range(5)]
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
+        message = Message(lesson=lesson, sender=user,
+                body='Please bring your own guitar for the class')
+        message.save()
+
         if is_json_request(request):
             return HttpResponse(json.dumps({}),
                                 content_type='application/json')
         else:
-            return HttpResponseRedirect('/')
+            return HttpResponse('<p>DB Reset successful</p>')
 
     else:
         return HttpResponse('<form method="post" action="/debug_reset_db/"><button type="submit">Reset DB</button><form>')
