@@ -7,9 +7,10 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import render_to_response, render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.models import User
 
 from levelhub.forms import UserSignupForm
-from levelhub.models import User, Lesson, LessonReg, LessonRegLog, Message
+from levelhub.models import Lesson, LessonReg, LessonRegLog, Message
 
 
 def is_json_request(request):

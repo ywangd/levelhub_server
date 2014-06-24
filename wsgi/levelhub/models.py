@@ -6,7 +6,7 @@ from levelhub.utils import utcnow
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User)
-    avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
+    #avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
     website = models.URLField(null=True, blank=True)
     data = models.TextField(null=True, blank=True)
 
