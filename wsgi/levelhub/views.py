@@ -57,8 +57,9 @@ def register(request):
 
             login(request, user)
             if jq:
-                return HttpResponse(json.dumps({'user': user.username,
-                                                'sessionid': request.session.session_key}))
+                return HttpResponse(
+                    json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
+                    content_type='application/json')
             else:
                 return HttpResponseRedirect('/')
         else:

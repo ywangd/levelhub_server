@@ -14,7 +14,7 @@ class UserProfile(models.Model):
         return '%d - %s' % (self.user.id, self.user.username)
 
     def dictify(self, update_with=None):
-        d = {'id': self.user.id,
+        d = {'user_id': self.user.id,
              'username': self.user.username,
              'first_name': self.user.first_name,
              'last_name': self.user.last_name,
@@ -37,7 +37,7 @@ class Lesson(models.Model):
         return '%d - %s' % (self.id, self.name)
 
     def dictify(self, update_with=None):
-        d = {'id': self.id,
+        d = {'lesson_id': self.id,
              'name': self.name,
              'description': self.description,
              'creation_time': self.creation_time,
@@ -63,7 +63,7 @@ class LessonReg(models.Model):
             return '%d - %s - %s %s' % (self.id, self.lesson.name, self.student_first_name, self.student_last_name)
 
     def dictify(self, update_with=None):
-        d = {'id': self.id,
+        d = {'reg_id': self.id,
              'student': self.student.dictify() if self.student is not None else None,
              'student_first_name': self.student_first_name,
              'student_last_name': self.student_last_name,
@@ -84,7 +84,7 @@ class LessonRegLog(models.Model):
         return '%d - %s - %s' % (self.id, self.lesson_reg, self.use_time)
 
     def dictify(self):
-        d = {'id': self.id,
+        d = {'rlog_id': self.id,
              'use_time': self.use_time,
              'creation_time': self.creation_time,
              'data': self.data}
@@ -100,3 +100,12 @@ class Message(models.Model):
 
     def __unicode__(self):
         return '%d - %s - %s - %s' % (self.id, self.lesson, self.body, self.sender)
+
+    def dictify(self):
+        d = {'message_id': self.id,
+             'lesson_id': self.lesson.id,
+             'sender_id': self.sender.id,
+             'body': self.body,
+             'creation_time': self.creation_time,
+             'data': self.data}
+        return d
