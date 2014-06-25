@@ -4,6 +4,14 @@ from django.contrib.auth.forms import UserCreationForm
 
 from levelhub.models import UserProfile
 
+class UserForm(forms.ModelForm):
+    password = forms.CharField(widget=forms.PasswordInput())
+
+    class Meta:
+        model = User
+        fields = ('username', 'password')
+
+
 class UserSignupForm(UserCreationForm):
     first_name = forms.CharField(max_length=30, help_text='Please enter your first name', required=False)
     last_name = forms.CharField(max_length=30, help_text='Please enter your last name', required=False)

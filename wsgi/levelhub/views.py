@@ -9,7 +9,7 @@ from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
-from levelhub.forms import UserSignupForm
+from levelhub.forms import UserSignupForm, UserForm
 from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message
 from levelhub.utils import DateEncoder
 
@@ -46,14 +46,13 @@ def register(request):
         signup_form = UserSignupForm(data=request.POST)
 
         if signup_form.is_valid():
+            username = signup_form.clean_username()
+            password = signup_form.clean_password2()
             user = signup_form.save()
-            password = user.password
-            user.set_password(password)
-            user.save()
             user_profile = UserProfile(user=user)
             user_profile.save()
 
-            user = authenticate(username=user.username, password=password)
+            user = authenticate(username=username, password=password)
 
             login(request, user)
             if jq:
@@ -88,7 +87,6 @@ def user_login(request):
         password = request.POST['password']
 
         user = authenticate(username=username, password=password)
-
         if user:
             login(request, user)
             if jq:
