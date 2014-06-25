@@ -6,12 +6,23 @@ from levelhub.utils import utcnow
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User)
-    #avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
+    # avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
     website = models.URLField(null=True, blank=True)
     data = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
-        return self.user.username
+        return '%d - %s' % (self.user.id, self.user.username)
+
+    def dictify(self, update_with=None):
+        d = {'id': self.user.id,
+             'username': self.user.username,
+             'first_name': self.user.first_name,
+             'last_name': self.user.last_name,
+             'email': self.user.email,
+             'data': self.data}
+        if update_with is not None:
+            d.update(update_with)
+        return d
 
 
 class Lesson(models.Model):
@@ -23,7 +34,17 @@ class Lesson(models.Model):
     data = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
-        return self.name
+        return '%d - %s' % (self.id, self.name)
+
+    def dictify(self, update_with=None):
+        d = {'id': self.id,
+             'name': self.name,
+             'description': self.description,
+             'creation_time': self.creation_time,
+             'data': self.data}
+        if update_with is not None:
+            d.update(update_with)
+        return d
 
 
 class LessonReg(models.Model):
@@ -37,9 +58,20 @@ class LessonReg(models.Model):
 
     def __unicode__(self):
         if self.student is not None:
-            return '%s - %s' % (self.lesson.name, self.student.username)
+            return '%d - %s - %s' % (self.id, self.lesson.name, self.student.username)
         else:
-            return '%s - %s %s' % (self.lesson.name, self.student_first_name, self.student_last_name)
+            return '%d - %s - %s %s' % (self.id, self.lesson.name, self.student_first_name, self.student_last_name)
+
+    def dictify(self, update_with=None):
+        d = {'id': self.id,
+             'student': self.student.dictify() if self.student is not None else None,
+             'student_first_name': self.student_first_name,
+             'student_last_name': self.student_last_name,
+             'creation_time': self.creation_time,
+             'data': self.data}
+        if update_with is not None:
+            d.update(update_with)
+        return d
 
 
 class LessonRegLog(models.Model):
@@ -49,7 +81,14 @@ class LessonRegLog(models.Model):
     data = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
-        return '%s - %s' % (self.lesson_reg, self.use_time)
+        return '%d - %s - %s' % (self.id, self.lesson_reg, self.use_time)
+
+    def dictify(self):
+        d = {'id': self.id,
+             'use_time': self.use_time,
+             'creation_time': self.creation_time,
+             'data': self.data}
+        return d
 
 
 class Message(models.Model):
@@ -60,4 +99,4 @@ class Message(models.Model):
     data = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
-        return '%s - %s - %s' % (self.lesson, self.body, self.sender)
+        return '%d - %s - %s - %s' % (self.id, self.lesson, self.body, self.sender)

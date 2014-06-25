@@ -10,14 +10,16 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
 from levelhub.forms import UserSignupForm
-from levelhub.models import Lesson, LessonReg, LessonRegLog, Message
+from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message
+from levelhub.utils import DateEncoder
 
 
 def is_json_request(request):
     if 'json' in request.POST or 'json' in request.GET:
         return True
     else:
-        return False
+        #return False
+        return True
 
 
 def add_header(func):
@@ -48,7 +50,11 @@ def register(request):
             password = user.password
             user.set_password(password)
             user.save()
+            user_profile = UserProfile(user=user)
+            user_profile.save()
+
             user = authenticate(username=user.username, password=password)
+
             login(request, user)
             if jq:
                 return HttpResponse(json.dumps({'user': user.username,
@@ -85,9 +91,9 @@ def user_login(request):
         if user:
             login(request, user)
             if jq:
-                return HttpResponse(json.dumps({'user': str(user),
-                                                'sessionid': request.session.session_key}),
-                                    content_type='application/json')
+                return HttpResponse(
+                    json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
+                    content_type='application/json')
             else:
                 return HttpResponseRedirect('/')
         else:
@@ -112,6 +118,52 @@ def user_logout(request):
     else:
         return HttpResponseRedirect('/')
 
+
+@login_required
+def teaches(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return HttpResponse(json.dumps({"err": "User does not exist"}),
+                            content_type='application/json')
+
+    lessons = Lesson.objects.filter(teacher=user)
+    response = []
+    for lesson in lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response.append(lesson.dictify({"nregs": nregs}))
+    print response
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def teach_regs(request, teach_id):
+    lesson_regs = LessonReg.objects.filter(lesson__id=teach_id)
+    response = []
+    for lr in lesson_regs:
+        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lr)
+        total = lesson_reg_logs.count()
+        unused = lesson_reg_logs.filter(use_time=None).count()
+        response.append(lr.dictify({"total": total, "unused": unused}))
+    print response
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def teach_reg_logs(request, reg_id):
+    lesson_reg = LessonReg.objects.get(id=reg_id)
+
+    response = []
+    lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
+    for lrl in lesson_reg_logs:
+        response.append(lrl.dictify())
+    print response
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
 @csrf_exempt
 def debug_reset_db(request):
     if request.method == 'POST':
@@ -120,10 +172,15 @@ def debug_reset_db(request):
         user.set_password('test')
         user.save()
 
+        UserProfile.objects.all().delete()
+        user_profile = UserProfile(user=user)
+        user_profile.save()
+
         Lesson.objects.all().delete()
         lesson = Lesson(teacher=user,
                         name='Folk Guitar Basics',
-                        description='An introductory lesson for people who want to pick up guitar fast with no previous experience')
+                        description='An introductory lesson for people who want to pick up guitar fast with no '
+                                    'previous experience')
         lesson.save()
 
         LessonReg.objects.all().delete()
@@ -145,7 +202,7 @@ def debug_reset_db(request):
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
         message = Message(lesson=lesson, sender=user,
-                body='Please bring your own guitar for the class')
+                          body='Please bring your own guitar for the class')
         message.save()
 
         if is_json_request(request):
@@ -155,5 +212,6 @@ def debug_reset_db(request):
             return HttpResponse('<p>DB Reset successful</p>')
 
     else:
-        return HttpResponse('<form method="post" action="/debug_reset_db/"><button type="submit">Reset DB</button><form>')
+        return HttpResponse(
+            '<form method="post" action="/debug_reset_db/"><button type="submit">Reset DB</button><form>')
 

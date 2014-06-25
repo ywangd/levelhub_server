@@ -136,3 +136,6 @@ STATIC_URL = '/static/'
 # session related settings
 # SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_AGE = 315360000  # 10 years
+
+# User profile
+AUTH_PROFILE_MODULE = 'levelhub.UserProfile'
