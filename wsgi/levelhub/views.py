@@ -15,11 +15,10 @@ from levelhub.utils import DateEncoder
 
 
 def is_json_request(request):
-    if 'json' in request.POST or 'json' in request.GET:
+    if request.path.startswith('/j/'):
         return True
     else:
-        #return False
-        return True
+        return False
 
 
 def add_header(func):
@@ -35,6 +34,11 @@ def add_header(func):
     return func_header_added
 
 
+def err_response(message):
+    return HttpResponse(json.dumps({"err": message}),
+                        content_type='application/json')
+
+
 def home(request):
     return render(request, 'home/home.html', {'version': django.VERSION})
 
@@ -42,7 +46,7 @@ def home(request):
 @csrf_exempt
 def register(request):
     if request.method == 'POST':
-        jq = is_json_request(request)
+        isJR = is_json_request(request)
         signup_form = UserSignupForm(data=request.POST)
 
         if signup_form.is_valid():
@@ -55,14 +59,14 @@ def register(request):
             user = authenticate(username=username, password=password)
 
             login(request, user)
-            if jq:
+            if isJR:
                 return HttpResponse(
                     json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
                     content_type='application/json')
             else:
                 return HttpResponseRedirect('/')
         else:
-            if jq:
+            if isJR:
                 err = {}
                 for field in signup_form:
                     if len(field.errors) > 0:
@@ -82,21 +86,21 @@ def register(request):
 @csrf_exempt
 def user_login(request):
     if request.method == 'POST':
-        jq = is_json_request(request)
+        isJR = is_json_request(request)
         username = request.POST['username']
         password = request.POST['password']
 
         user = authenticate(username=username, password=password)
         if user:
             login(request, user)
-            if jq:
+            if isJR:
                 return HttpResponse(
                     json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
                     content_type='application/json')
             else:
                 return HttpResponseRedirect('/')
         else:
-            if jq:
+            if isJR:
                 return HttpResponse(json.dumps({'err': 'Invalid login'}),
                                     content_type='application/json')
 
@@ -119,46 +123,79 @@ def user_logout(request):
 
 
 @login_required
-def teaches(request, user_id):
+def get_teach_lessons(request, user_id):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return HttpResponse(json.dumps({"err": "User does not exist"}),
-                            content_type='application/json')
+        return err_response('User does not exit')
 
     lessons = Lesson.objects.filter(teacher=user)
     response = []
     for lesson in lessons:
         nregs = LessonReg.objects.filter(lesson=lesson).count()
         response.append(lesson.dictify({"nregs": nregs}))
-    print response
+
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 
 
 @login_required
-def teach_regs(request, teach_id):
-    lesson_regs = LessonReg.objects.filter(lesson__id=teach_id)
+def get_study_lessons(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return err_response('User does not exit')
+
+    lesson_regs = LessonReg.objects.filter(student=user)
     response = []
-    for lr in lesson_regs:
-        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lr)
+    for lesson_reg in lesson_regs:
+        lesson = lesson_reg.lesson
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response.append(lesson.dictify({"nregs": nregs}))
+
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def get_lesson_regs(request, lesson_id):
+    try:
+        lesson = Lesson.objects.get(id=lesson_id)
+    except Lesson.DoesNotExist:
+        return err_response('lesson does not exist')
+
+    if request.user.username not in (lesson.teacher.username, 'admin'):
+        return err_response('No permission to view registration details')
+
+    lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id)
+    response = []
+    for lesson_reg in lesson_regs:
+        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
         total = lesson_reg_logs.count()
         unused = lesson_reg_logs.filter(use_time=None).count()
-        response.append(lr.dictify({"total": total, "unused": unused}))
-    print response
+        response.append(lesson_reg.dictify({"total": total, "unused": unused}))
+
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 
 
 @login_required
-def teach_reg_logs(request, reg_id):
-    lesson_reg = LessonReg.objects.get(id=reg_id)
+def get_lesson_reg_logs(request, reg_id):
+    try:
+        lesson_reg = LessonReg.objects.get(id=reg_id)
+    except LessonReg.DoesNotExist:
+        return err_response('Lesson registration does not exist')
+
+    teacher = lesson_reg.lesson.teacher
+    student = lesson_reg.student
+    if request.user.username not in (teacher.username, student.username, 'admin'):
+        return err_response('No permission to view lesson registration logs')
 
     response = []
     lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
-    for lrl in lesson_reg_logs:
-        response.append(lrl.dictify())
-    print response
+    for lesson_reg_log in lesson_reg_logs:
+        response.append(lesson_reg_log.dictify())
+
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 

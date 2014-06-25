@@ -64,7 +64,7 @@ class LessonReg(models.Model):
 
     def dictify(self, update_with=None):
         d = {'reg_id': self.id,
-             'student': self.student.dictify() if self.student is not None else None,
+             'student': self.student.dictify() if self.student else None,
              'student_first_name': self.student_first_name,
              'student_last_name': self.student_last_name,
              'creation_time': self.creation_time,
