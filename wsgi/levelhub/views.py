@@ -200,6 +200,74 @@ def get_lesson_reg_logs(request, reg_id):
                         content_type='application/json')
 
 
+
+@login_required
+@csrf_exempt
+def update_lesson(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        if 'create' in data:
+            lesson = Lesson(teacher=request.user, **data['create'])
+            lesson.save()
+        elif 'update' in data:
+            entry = data['update']
+            lesson_id = entry.pop('lesson_id')
+            qs = Lesson.objects.filter(id=lesson_id)
+            if qs.exists():
+                if request.user.username in (qs.first().teacher.username, 'admin'):
+                    qs.update(**entry)
+                else:
+                    return err_response('no permission to update lesson')
+            else:
+                return err_response('lesson does not exist')
+        elif 'delete' in data:
+            lesson_id = data['delete']['lesson_id']
+            qs = Lesson.objects.filter(id=lesson_id)
+            if qs.exists():
+                if request.user.username in (qs.first().teacher.username, 'admin'):
+                    qs.delete()
+                else:
+                    return err_response('no permission to delete lesson')
+            else:
+                return err_response('lesson does not exist')
+
+        return HttpResponse(json.dumps({}),
+                            content_type='application/json')
+    else:
+        return err_response('POST is required')
+
+
+@login_required
+@csrf_exempt
+def update_lesson_reg(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        if 'create' in data:
+            entry = data['create']
+            try:
+                lesson = Lesson.objects.get(id=entry['lesson_id'])
+            except Lesson.DoesNotExist:
+                return err_response('lesson does not exist')
+            if request.user.username in (lesson.teacher.username, 'admin'):
+                lesson_reg = LessonReg(lesson=lesson,
+                                       student_first_name=entry['first_name'],
+                                       student_last_name=entry['last_name'],
+                                       data=entry['data'])
+                lesson_reg.save()
+            else:
+                return err_response('no permission to add new student')
+
+        return HttpResponse(json.dumps({}),
+                            content_type='application/json')
+
+    else:
+        return err_response('POST is required')
+
+
+
+
+
+
 @csrf_exempt
 def debug_reset_db(request):
     if request.method == 'POST':

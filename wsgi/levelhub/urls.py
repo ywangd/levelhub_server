@@ -17,6 +17,8 @@ urlpatterns = patterns('',
     url(r'^j/get_study_lessons/(?P<user_id>\d+)/$', 'views.get_study_lessons', name='j_study_lessons'),
     url(r'^j/get_lesson_regs/(?P<lesson_id>\d+)/$', 'views.get_lesson_regs', name='j_lesson_regs'),
     url(r'^j/get_lesson_reg_logs/(?P<reg_id>\d+)/$', 'views.get_lesson_reg_logs', name='j_lesson_reg_logs'),
+    url(r'^j/update_lesson/$', 'views.update_lesson', name='j_update_lesson'),
+    url(r'^j/update_lesson_reg/$', 'views.update_lesson_reg', name='j_update_lesson_reg'),
 
 
     url(r'^debug_reset_db/$', 'views.debug_reset_db', name='debug_reset_db'),
