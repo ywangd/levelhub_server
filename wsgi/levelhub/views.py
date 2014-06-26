@@ -188,7 +188,10 @@ def get_lesson_reg_logs(request, reg_id):
 
     teacher = lesson_reg.lesson.teacher
     student = lesson_reg.student
-    if request.user.username not in (teacher.username, student.username, 'admin'):
+    users_allowed = [teacher.username, 'admin']
+    if student:
+        users_allowed.append(student.username)
+    if request.user.username not in users_allowed:
         return err_response('No permission to view lesson registration logs')
 
     response = []
