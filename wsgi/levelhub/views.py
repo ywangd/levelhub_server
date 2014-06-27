@@ -203,7 +203,6 @@ def get_lesson_reg_logs(request, reg_id):
                         content_type='application/json')
 
 
-
 @login_required
 @csrf_exempt
 def update_lesson(request):
@@ -242,7 +241,7 @@ def update_lesson(request):
 
 @login_required
 @csrf_exempt
-def update_lesson_reg(request):
+def update_lesson_reg_and_logs(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         if 'create' in data:
@@ -259,6 +258,59 @@ def update_lesson_reg(request):
                 lesson_reg.save()
             else:
                 return err_response('no permission to add new student')
+
+        elif 'update' in data:
+            entry = data['update']
+            reg_id = entry.pop('reg_id')
+            qs = LessonReg.objects.filter(id=reg_id)
+            if qs.exists():
+                lesson_reg = qs.first()
+                if request.user.username in (lesson_reg.lesson.teacher.username, 'admin'):
+                    rlogs = entry.pop('rlogs')
+                    qs.update(**entry)
+                    for log in rlogs['create']:
+                        lesson_reg_log = LessonRegLog(lesson_reg=lesson_reg,
+                                                      use_time=log['use_time'],
+                                                      data=log['data'])
+                        lesson_reg_log.save()
+                    for log in rlogs['update']:
+                        rlog_id = log.pop('rlog_id')
+                        qs = LessonRegLog.objects.filter(id=rlog_id)
+                        if qs.exists():
+                            lesson_reg_log = qs.first()
+                            if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
+                                qs.update(**log)
+                            else:
+                                return err_response('no permission to update lesson registration log')
+                        else:
+                            return err_response('lesson registration log does not exist')
+                    for log in rlogs['delete']:
+                        rlog_id = log.pop('rlog_id')
+                        qs = LessonRegLog.objects.filter(id=rlog_id)
+                        if qs.exists():
+                            lesson_reg_log = qs.first()
+                            if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
+                                qs.delete()
+                            else:
+                                return err_response('no permission to delete lesson registration log')
+                        else:
+                            return err_response('lesson registration log does not exist')
+
+                else:
+                    return err_response('no permission to update lesson registration')
+            else:
+                return err_response('lesson registration does not exist')
+
+        elif 'delete' in data:
+            reg_id = data['delete']['reg_id']
+            qs = LessonReg.objects.filter(id=reg_id)
+            if qs.exists():
+                if request.user.username in (qs.first().lesson.teacher.username, 'admin'):
+                    qs.delete()
+                else:
+                    return err_response('no permission to delete lesson registration')
+            else:
+                return err_response('lesson registration does not exist')
 
         return HttpResponse(json.dumps({}),
                             content_type='application/json')

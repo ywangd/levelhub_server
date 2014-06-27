@@ -1,14 +1,18 @@
+import json
+
 from django.db import models
 from django.contrib.auth.models import User
 
 from levelhub.utils import utcnow
 
 
+JSON_NULL = json.dumps({})
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User)
     # avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
     website = models.URLField(null=True, blank=True)
-    data = models.TextField(null=True, blank=True)
+    data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
         return '%d - %s' % (self.user.id, self.user.username)
@@ -31,7 +35,7 @@ class Lesson(models.Model):
     description = models.CharField(max_length=1024, null=True)
     is_active = models.BooleanField(default=True)
     creation_time = models.DateTimeField(default=utcnow)
-    data = models.TextField(null=True, blank=True)
+    data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
         return '%d - %s' % (self.id, self.name)
@@ -54,7 +58,7 @@ class LessonReg(models.Model):
     student_last_name = models.CharField(max_length=30)
     is_active = models.BooleanField(default=True)
     creation_time = models.DateTimeField(default=utcnow)
-    data = models.TextField(null=True, blank=True)
+    data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
         if self.student is not None:
@@ -78,7 +82,7 @@ class LessonRegLog(models.Model):
     lesson_reg = models.ForeignKey(LessonReg)
     use_time = models.DateTimeField(null=True, blank=True)
     creation_time = models.DateTimeField(default=utcnow)
-    data = models.TextField(null=True, blank=True)
+    data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
         return '%d - %s - %s' % (self.id, self.lesson_reg, self.use_time)
@@ -96,7 +100,7 @@ class Message(models.Model):
     sender = models.ForeignKey(User)
     body = models.TextField(max_length=256)
     creation_time = models.DateTimeField(default=utcnow)
-    data = models.TextField(null=True, blank=True)
+    data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
         return '%d - %s - %s - %s' % (self.id, self.lesson, self.body, self.sender)

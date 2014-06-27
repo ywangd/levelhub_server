@@ -40,6 +40,7 @@ class XsSharing(object):
             response['Access-Control-Allow-Credentials'] = 'true'
             if 'HTTP_ACCESS_CONTROL_REQUEST_HEADERS' in request.META:
                 response['Access-Control-Allow-Headers'] = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
+            response['Access-Control-Max-Age'] = '0'
 
             return response
 
@@ -61,5 +62,8 @@ class XsSharing(object):
         response['Access-Control-Allow-Origin'] = origin  # XS_SHARING_ALLOWED_ORIGINS
         response['Access-Control-Allow-Methods'] = ",".join(XS_SHARING_ALLOWED_METHODS)
         response['Access-Control-Allow-Credentials'] = 'true'
+        if 'HTTP_ACCESS_CONTROL_REQUEST_HEADERS' in request.META:
+            response['Access-Control-Allow-Headers'] = request.META['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']
+        response['Access-Control-Max-Age'] = '0'
 
         return response
