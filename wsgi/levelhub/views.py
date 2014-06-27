@@ -4,6 +4,7 @@ import django
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseNotFound, HttpResponseForbidden, HttpResponseBadRequest
 from django.shortcuts import render_to_response, render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
@@ -67,11 +68,9 @@ def register(request):
                 return HttpResponseRedirect('/')
         else:
             if isJR:
-                err = {}
                 for field in signup_form:
                     if len(field.errors) > 0:
-                        err[field.html_name] = field.errors[0]
-                return HttpResponse(json.dumps({'err': err}))
+                        return HttpResponseBadRequest(field.errors[0])
             else:
                 print 'signup_form.errors', signup_form.errors
 
@@ -101,10 +100,9 @@ def user_login(request):
                 return HttpResponseRedirect('/')
         else:
             if isJR:
-                return HttpResponse(json.dumps({'err': 'Invalid login'}),
-                                    content_type='application/json')
-
-            return HttpResponse('Invalid login')
+                return HttpResponseNotFound('Invalid login')
+            else:
+                return HttpResponse('Invalid login')
 
     else:
         return render(request, 'home/login.html', {})
@@ -127,7 +125,7 @@ def get_teach_lessons(request, user_id):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return err_response('User does not exit')
+        return HttpResponseNotFound('User does not exist')
 
     lessons = Lesson.objects.filter(teacher=user)
     response = []
@@ -144,7 +142,7 @@ def get_study_lessons(request, user_id):
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return err_response('User does not exit')
+        return HttpResponseNotFound('User does not exist')
 
     lesson_regs = LessonReg.objects.filter(student=user)
     response = []
@@ -162,10 +160,10 @@ def get_lesson_regs(request, lesson_id):
     try:
         lesson = Lesson.objects.get(id=lesson_id)
     except Lesson.DoesNotExist:
-        return err_response('lesson does not exist')
+        return HttpResponseNotFound('Lesson does not exist')
 
     if request.user.username not in (lesson.teacher.username, 'admin'):
-        return err_response('No permission to view registration details')
+        return HttpResponseForbidden('No permission to view registration details')
 
     lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id)
     response = []
@@ -184,7 +182,7 @@ def get_lesson_reg_logs(request, reg_id):
     try:
         lesson_reg = LessonReg.objects.get(id=reg_id)
     except LessonReg.DoesNotExist:
-        return err_response('Lesson registration does not exist')
+        return HttpResponseNotFound('Lesson registration does not exist')
 
     teacher = lesson_reg.lesson.teacher
     student = lesson_reg.student
@@ -192,7 +190,7 @@ def get_lesson_reg_logs(request, reg_id):
     if student:
         users_allowed.append(student.username)
     if request.user.username not in users_allowed:
-        return err_response('No permission to view lesson registration logs')
+        return HttpResponseForbidden('No permission to view lesson registration logs')
 
     response = []
     lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
@@ -219,9 +217,9 @@ def update_lesson(request):
                 if request.user.username in (qs.first().teacher.username, 'admin'):
                     qs.update(**entry)
                 else:
-                    return err_response('no permission to update lesson')
+                    return HttpResponseForbidden('No permission to update lesson')
             else:
-                return err_response('lesson does not exist')
+                return HttpResponseNotFound('Lesson does not exist')
         elif 'delete' in data:
             lesson_id = data['delete']['lesson_id']
             qs = Lesson.objects.filter(id=lesson_id)
@@ -229,14 +227,14 @@ def update_lesson(request):
                 if request.user.username in (qs.first().teacher.username, 'admin'):
                     qs.delete()
                 else:
-                    return err_response('no permission to delete lesson')
+                    return HttpResponseForbidden('No permission to delete lesson')
             else:
-                return err_response('lesson does not exist')
+                return HttpResponseNotFound('Lesson does not exist')
 
         return HttpResponse(json.dumps({}),
                             content_type='application/json')
     else:
-        return err_response('POST is required')
+        return HttpResponseBadRequest('POST is required')
 
 
 @login_required
@@ -249,7 +247,7 @@ def update_lesson_reg_and_logs(request):
             try:
                 lesson = Lesson.objects.get(id=entry['lesson_id'])
             except Lesson.DoesNotExist:
-                return err_response('lesson does not exist')
+                return HttpResponseNotFound('Lesson does not exist')
             if request.user.username in (lesson.teacher.username, 'admin'):
                 lesson_reg = LessonReg(lesson=lesson,
                                        student_first_name=entry['first_name'],
@@ -257,7 +255,7 @@ def update_lesson_reg_and_logs(request):
                                        data=entry['data'])
                 lesson_reg.save()
             else:
-                return err_response('no permission to add new student')
+                return HttpResponseForbidden('no permission to add new student')
 
         elif 'update' in data:
             entry = data['update']
@@ -281,9 +279,9 @@ def update_lesson_reg_and_logs(request):
                             if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
                                 qs.update(**log)
                             else:
-                                return err_response('no permission to update lesson registration log')
+                                return HttpResponseForbidden('No permission to update lesson registration log')
                         else:
-                            return err_response('lesson registration log does not exist')
+                            return HttpResponseNotFound('Lesson registration log does not exist')
                     for log in rlogs['delete']:
                         rlog_id = log.pop('rlog_id')
                         qs = LessonRegLog.objects.filter(id=rlog_id)
@@ -292,14 +290,14 @@ def update_lesson_reg_and_logs(request):
                             if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
                                 qs.delete()
                             else:
-                                return err_response('no permission to delete lesson registration log')
+                                return HttpResponseForbidden('No permission to delete lesson registration log')
                         else:
-                            return err_response('lesson registration log does not exist')
+                            return HttpResponseNotFound('Lesson registration log does not exist')
 
                 else:
-                    return err_response('no permission to update lesson registration')
+                    return HttpResponseForbidden('No permission to update lesson registration')
             else:
-                return err_response('lesson registration does not exist')
+                return HttpResponseNotFound('Lesson registration does not exist')
 
         elif 'delete' in data:
             reg_id = data['delete']['reg_id']
@@ -308,15 +306,15 @@ def update_lesson_reg_and_logs(request):
                 if request.user.username in (qs.first().lesson.teacher.username, 'admin'):
                     qs.delete()
                 else:
-                    return err_response('no permission to delete lesson registration')
+                    return HttpResponseForbidden('No permission to delete lesson registration')
             else:
-                return err_response('lesson registration does not exist')
+                return HttpResponseNotFound('Lesson registration does not exist')
 
         return HttpResponse(json.dumps({}),
                             content_type='application/json')
 
     else:
-        return err_response('POST is required')
+        return HttpResponseBadRequest('POST is required')
 
 
 
