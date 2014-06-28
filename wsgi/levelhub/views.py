@@ -200,6 +200,55 @@ def get_lesson_reg_logs(request, reg_id):
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 
+@login_required
+@csrf_exempt
+def lesson_messages(request):
+    user = request.user
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        if 'create' in data:
+            entry = data['create']
+            try:
+                lesson = Lesson.objects.get(id=entry['lesson_id'])
+            except Lesson.DoesNotExist:
+                return HttpResponseNotFound('Lesson does not exist')
+            valid_usernames = [lesson.teacher.username, 'admin']
+            for lesson_reg in LessonReg.objects.filter(lesson=lesson):
+                if lesson_reg.student:
+                    valid_usernames.append(lesson_reg.student.username)
+            if user.username in valid_usernames:
+                message = Message(lesson=lesson, sender=user, body=entry['body'])
+                message.save()
+            else:
+                return HttpResponseForbidden('No permission to post message')
+
+        elif 'delete' in data:
+            qs = Message.objects.filter(id=data['delete']['message_id'])
+            if qs.exists():
+                if user.username in (qs.first().sender.username, 'admin'):
+                    qs.delete()
+                else:
+                    return HttpResponseForbidden('No permission to delete message')
+            else:
+                return HttpResponseNotFound('Message does not exist')
+
+        return HttpResponse(json.dumps({}),
+                            content_type='application/json')
+
+    else:
+        lessons = Lesson.objects.filter(teacher=user)
+        lessons = [lesson for lesson in lessons]
+        for lesson_reg in LessonReg.objects.filter(student=user):
+            if lesson_reg.lesson not in lessons:
+                lessons.append(lesson_reg.lesson)
+        messages = Message.objects.filter(lesson__in=lessons).order_by('-id')
+        response = []
+        for message in messages:
+            response.append(message.dictify())
+
+        return HttpResponse(json.dumps(response, cls=DateEncoder),
+                            content_type='application/json')
+
 
 @login_required
 @csrf_exempt
@@ -255,7 +304,7 @@ def update_lesson_reg_and_logs(request):
                                        data=entry['data'])
                 lesson_reg.save()
             else:
-                return HttpResponseForbidden('no permission to add new student')
+                return HttpResponseForbidden('No permission to add new student')
 
         elif 'update' in data:
             entry = data['update']

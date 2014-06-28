@@ -42,6 +42,7 @@ class Lesson(models.Model):
 
     def dictify(self, update_with=None):
         d = {'lesson_id': self.id,
+             'teacher_id': self.teacher.id,
              'name': self.name,
              'description': self.description,
              'creation_time': self.creation_time,
@@ -68,6 +69,7 @@ class LessonReg(models.Model):
 
     def dictify(self, update_with=None):
         d = {'reg_id': self.id,
+             'lesson_id': self.lesson.id,
              'student': self.student.dictify() if self.student else None,
              'student_first_name': self.student_first_name,
              'student_last_name': self.student_last_name,
@@ -89,6 +91,7 @@ class LessonRegLog(models.Model):
 
     def dictify(self):
         d = {'rlog_id': self.id,
+             'lesson_reg_id': self.lesson_reg.id,
              'use_time': self.use_time,
              'creation_time': self.creation_time,
              'data': self.data}
@@ -107,8 +110,8 @@ class Message(models.Model):
 
     def dictify(self):
         d = {'message_id': self.id,
-             'lesson_id': self.lesson.id,
-             'sender_id': self.sender.id,
+             'lesson': self.lesson.dictify(),
+             'sender': self.sender.get_profile().dictify(),
              'body': self.body,
              'creation_time': self.creation_time,
              'data': self.data}

@@ -20,6 +20,8 @@ urlpatterns = patterns('',
     url(r'^j/update_lesson/$', 'views.update_lesson', name='j_update_lesson'),
     url(r'^j/update_lesson_reg_and_logs/$', 'views.update_lesson_reg_and_logs', name='j_update_lesson_reg_and_logs'),
 
+    url(r'^j/lesson_messages/$', 'views.lesson_messages', name='j_lesson_messages'),
+
 
     url(r'^debug_reset_db/$', 'views.debug_reset_db', name='debug_reset_db'),
 
