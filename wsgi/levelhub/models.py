@@ -42,7 +42,7 @@ class Lesson(models.Model):
 
     def dictify(self, update_with=None):
         d = {'lesson_id': self.id,
-             'teacher_id': self.teacher.id,
+             'teacher': self.teacher.get_profile().dictify(),
              'name': self.name,
              'description': self.description,
              'creation_time': self.creation_time,
@@ -70,7 +70,7 @@ class LessonReg(models.Model):
     def dictify(self, update_with=None):
         d = {'reg_id': self.id,
              'lesson_id': self.lesson.id,
-             'student': self.student.dictify() if self.student else None,
+             'student': self.student.get_profile().dictify() if self.student else None,
              'student_first_name': self.student_first_name,
              'student_last_name': self.student_last_name,
              'creation_time': self.creation_time,

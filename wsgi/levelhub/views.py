@@ -374,12 +374,24 @@ def update_lesson_reg_and_logs(request):
 def debug_reset_db(request):
     if request.method == 'POST':
         User.objects.exclude(username='admin').delete()
-        user = User(username='test', email='test@test.com', first_name='first', last_name='last')
+        user = User(username='test', email='test@test.com', first_name='Awesome', last_name='Teacher')
         user.set_password('test')
         user.save()
 
+        student = User(username='student', email='student@test.com', first_name='Great', last_name='Student')
+        student.set_password('test')
+        student.save()
+
+        teacher = User(username='teacher', email='teacher@test.com')
+        teacher.set_password('test')
+        teacher.save()
+
         UserProfile.objects.all().delete()
         user_profile = UserProfile(user=user)
+        user_profile.save()
+        user_profile = UserProfile(user=student)
+        user_profile.save()
+        user_profile = UserProfile(user=teacher)
         user_profile.save()
 
         Lesson.objects.all().delete()
@@ -388,6 +400,11 @@ def debug_reset_db(request):
                         description='An introductory lesson for people who want to pick up guitar fast with no '
                                     'previous experience')
         lesson.save()
+
+        lesson_2 = Lesson(teacher=teacher,
+                          name='Practical Fitness',
+                          description='You can be as lazy as you like. Fitness is still guaranteed. Yes it is realistic if you join now.')
+        lesson_2.save()
 
         LessonReg.objects.all().delete()
         lesson_reg_1 = LessonReg(lesson=lesson,
@@ -399,6 +416,13 @@ def debug_reset_db(request):
                                  student_last_name='Wang')
         lesson_reg_2.save()
 
+        lesson_reg_3 = LessonReg(lesson=lesson, student=student,
+                                 student_first_name=student.first_name,
+                                 student_last_name=student.last_name)
+        lesson_reg_3.save()
+
+        LessonReg(lesson=lesson_2, student=user).save()
+
         LessonRegLog.objects.all().delete()
         lesson_reg_logs_1 = [LessonRegLog(lesson_reg=lesson_reg_1,
                                           use_time='2014-06-22 15:30:00' if i < 14 else None) for i in range(25)]
@@ -408,7 +432,11 @@ def debug_reset_db(request):
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
         message = Message(lesson=lesson, sender=user,
-                          body='Please bring your own guitar for the class')
+                          body='Please bring your own guitar for the class. Rent Guitar program is no longer available.',
+                          creation_time='2014-06-22 15:30:00Z')
+        message.save()
+        message = Message(lesson=lesson, sender=student,
+                          body='I love this lesson. Definitely going to recommend to my friends.')
         message.save()
 
         if is_json_request(request):
