@@ -8,10 +8,11 @@ from levelhub.utils import utcnow
 
 JSON_NULL = json.dumps({})
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(User)
     # avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
-    website = models.URLField(null=True, blank=True)
+    website = models.URLField(blank=True)
     data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
@@ -22,6 +23,8 @@ class UserProfile(models.Model):
              'username': self.user.username,
              'first_name': self.user.first_name,
              'last_name': self.user.last_name,
+             'display_name': (self.user.username if self.user.first_name == '' and self.user.last_name == ''
+                              else ' '.join([self.user.first_name, self.user.last_name])),
              'email': self.user.email,
              'data': self.data}
         if update_with is not None:
@@ -32,7 +35,7 @@ class UserProfile(models.Model):
 class Lesson(models.Model):
     teacher = models.ForeignKey(User)
     name = models.CharField(max_length=64)
-    description = models.CharField(max_length=1024, null=True)
+    description = models.CharField(max_length=1024)
     is_active = models.BooleanField(default=True)
     creation_time = models.DateTimeField(default=utcnow)
     data = models.TextField(default=JSON_NULL)

@@ -138,19 +138,30 @@ def get_teach_lessons(request, user_id):
 
 
 @login_required
-def get_study_lessons(request, user_id):
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return HttpResponseNotFound('User does not exist')
-
-    lesson_regs = LessonReg.objects.filter(student=user)
+def get_study_lessons(request):
+    # Can only view one's own studies
+    lesson_regs = LessonReg.objects.filter(student=request.user)
     response = []
     for lesson_reg in lesson_regs:
         lesson = lesson_reg.lesson
         nregs = LessonReg.objects.filter(lesson=lesson).count()
         response.append(lesson.dictify({"nregs": nregs}))
 
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def get_user_lessons(request):
+    user = request.user
+    lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
+    for lesson_reg in LessonReg.objects.filter(student=user):
+        if lesson_reg.lesson not in lessons:
+            lessons.append(lesson_reg.lesson)
+    response = []
+    for lesson in lessons:
+        response.append(lesson.dictify())
+        
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 
@@ -172,6 +183,10 @@ def get_lesson_regs(request, lesson_id):
         total = lesson_reg_logs.count()
         unused = lesson_reg_logs.filter(use_time=None).count()
         response.append(lesson_reg.dictify({"total": total, "unused": unused}))
+
+    # Sort student alphabetically
+    response.sort(key=lambda x: x['student']['display_name'] if x['student'] else ' '.join(
+        [x['student_first_name'], x['student_last_name']]))
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
@@ -199,6 +214,7 @@ def get_lesson_reg_logs(request, reg_id):
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
+
 
 @login_required
 @csrf_exempt
@@ -366,10 +382,6 @@ def update_lesson_reg_and_logs(request):
         return HttpResponseBadRequest('POST is required')
 
 
-
-
-
-
 @csrf_exempt
 def debug_reset_db(request):
     if request.method == 'POST':
@@ -403,7 +415,8 @@ def debug_reset_db(request):
 
         lesson_2 = Lesson(teacher=teacher,
                           name='Practical Fitness',
-                          description='You can be as lazy as you like. Fitness is still guaranteed. Yes it is realistic if you join now.')
+                          description='You can be as lazy as you like. Fitness is still guaranteed. Yes it is '
+                                      'realistic if you join now.')
         lesson_2.save()
 
         LessonReg.objects.all().delete()
@@ -432,7 +445,8 @@ def debug_reset_db(request):
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
         message = Message(lesson=lesson, sender=user,
-                          body='Please bring your own guitar for the class. Rent Guitar program is no longer available.',
+                          body='Please bring your own guitar for the class. Rent Guitar program is no longer '
+                               'available.',
                           creation_time='2014-06-22 15:30:00Z')
         message.save()
         message = Message(lesson=lesson, sender=student,
