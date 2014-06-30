@@ -131,7 +131,7 @@ def get_teach_lessons(request, user_id):
     response = []
     for lesson in lessons:
         nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response.append(lesson.dictify({"nregs": nregs}))
+        response.append(lesson.dictify({'nregs': nregs}))
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
@@ -145,7 +145,7 @@ def get_study_lessons(request):
     for lesson_reg in lesson_regs:
         lesson = lesson_reg.lesson
         nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response.append(lesson.dictify({"nregs": nregs}))
+        response.append(lesson.dictify({'nregs': nregs}))
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
@@ -154,13 +154,17 @@ def get_study_lessons(request):
 @login_required
 def get_user_lessons(request):
     user = request.user
-    lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
-    for lesson_reg in LessonReg.objects.filter(student=user):
-        if lesson_reg.lesson not in lessons:
-            lessons.append(lesson_reg.lesson)
-    response = []
-    for lesson in lessons:
-        response.append(lesson.dictify())
+    teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
+    study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
+
+    response = {'teach': [], 'study': []}
+    for lesson in teach_lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response['teach'].append(lesson.dictify({'nregs': nregs}))
+
+    for lesson in study_lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response['study'].append(lesson.dictify({'nregs': nregs}))
         
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
