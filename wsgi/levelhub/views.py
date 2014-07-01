@@ -10,6 +10,7 @@ from django.shortcuts import render_to_response, render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
+from django.db.models import Q
 
 from levelhub.forms import UserSignupForm, UserForm
 from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message, LessonMessage, UserMessage
@@ -214,6 +215,20 @@ def get_lesson_reg_logs(request, reg_id):
     lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
     for lesson_reg_log in lesson_reg_logs:
         response.append(lesson_reg_log.dictify())
+
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def user_search(request):
+    phrase = request.GET['phrase']
+    users = User.objects.filter(Q(username__contains=phrase)
+                        | Q(first_name__contains=phrase)
+                        | Q(last_name__contains=phrase)).exclude(username='admin').exclude(username=request.user.username)
+    response = []
+    for user in users:
+        response.append(user.get_profile().dictify())
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
@@ -431,23 +446,21 @@ def debug_reset_db(request):
 
         Lesson.objects.all().delete()
         magic_lesson = Lesson(teacher=elsa,
-                        name='Cool Magic Basics',
-                        description='An introductory lesson for people who want to learn cool magic fast with no '
-                                    'previous experience')
+                              name='Cool Magic Basics',
+                              description='An introductory lesson for people who want to learn cool magic fast with no '
+                                          'previous experience')
         magic_lesson.save()
 
         love_lesson = Lesson(teacher=olaf,
-                          name='Practical Love Advice',
-                          description='You can be as lazy as you like, yet Love is still guaranteed. Yes it is '
-                                      'realistic if you join now.')
+                             name='Practical Love Advice',
+                             description='You can be as lazy as you like, yet Love is still guaranteed. Yes it is '
+                                         'realistic if you join now.')
         love_lesson.save()
-
 
         medic_lesson = Lesson(teacher=troll,
                               name='Expert Medical Tricks',
                               description='Got a brain damage or wanna cure one? Join now and you will learn in no time')
         medic_lesson.save()
-
 
         LessonReg.objects.all().delete()
         lesson_reg_1 = LessonReg(lesson=magic_lesson,
