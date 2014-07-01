@@ -102,20 +102,43 @@ class LessonRegLog(models.Model):
 
 
 class Message(models.Model):
-    lesson = models.ForeignKey(Lesson)
     sender = models.ForeignKey(User)
     body = models.TextField(max_length=256)
     creation_time = models.DateTimeField(default=utcnow)
     data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
-        return '%d - %s - %s - %s' % (self.id, self.lesson, self.body, self.sender)
+        return '%d - %s - %s' % (self.id, self.body, self.sender)
 
     def dictify(self):
         d = {'message_id': self.id,
-             'lesson': self.lesson.dictify(),
              'sender': self.sender.get_profile().dictify(),
              'body': self.body,
              'creation_time': self.creation_time,
              'data': self.data}
+        return d
+
+
+class LessonMessage(models.Model):
+    lesson = models.ForeignKey(Lesson)  # the lesson for receiving the message
+    message = models.ForeignKey(Message)
+
+    def __unicode__(self):
+        return '%d - %s - %s' % (self.id, self.lesson, self.message)
+
+    def dictify(self):
+        d = {'lesson': self.lesson.dictify(),
+             'message': self.message.dictify()}
+        return d
+
+class UserMessage(models.Model):
+    user = models.ForeignKey(User)  # the recipient user of the message
+    message = models.ForeignKey(Message)
+
+    def __unicode__(self):
+        return '%d - %s - %s' % (self.id, self.user, self.message)
+
+    def dictify(self):
+        d = {'user': self.user.dictify(),
+             'message': self.message.dictify()}
         return d

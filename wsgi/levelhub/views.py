@@ -1,3 +1,4 @@
+from itertools import chain, groupby
 import json
 
 import django
@@ -11,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
 from levelhub.forms import UserSignupForm, UserForm
-from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message
+from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message, LessonMessage, UserMessage
 from levelhub.utils import DateEncoder
 
 
@@ -35,9 +36,10 @@ def add_header(func):
     return func_header_added
 
 
-def err_response(message):
-    return HttpResponse(json.dumps({"err": message}),
-                        content_type='application/json')
+def query_user_lessons(user):
+    teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
+    study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
+    return (teach_lessons, study_lessons)
 
 
 def home(request):
@@ -153,10 +155,7 @@ def get_study_lessons(request):
 
 @login_required
 def get_user_lessons(request):
-    user = request.user
-    teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
-    study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
-
+    teach_lessons, study_lessons = query_user_lessons(request.user)
     response = {'teach': [], 'study': []}
     for lesson in teach_lessons:
         nregs = LessonReg.objects.filter(lesson=lesson).count()
@@ -165,7 +164,7 @@ def get_user_lessons(request):
     for lesson in study_lessons:
         nregs = LessonReg.objects.filter(lesson=lesson).count()
         response['study'].append(lesson.dictify({'nregs': nregs}))
-        
+
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
 
@@ -228,19 +227,26 @@ def lesson_messages(request):
         data = json.loads(request.body)
         if 'create' in data:
             entry = data['create']
-            try:
-                lesson = Lesson.objects.get(id=entry['lesson_id'])
-            except Lesson.DoesNotExist:
-                return HttpResponseNotFound('Lesson does not exist')
-            valid_usernames = [lesson.teacher.username, 'admin']
-            for lesson_reg in LessonReg.objects.filter(lesson=lesson):
-                if lesson_reg.student:
-                    valid_usernames.append(lesson_reg.student.username)
-            if user.username in valid_usernames:
-                message = Message(lesson=lesson, sender=user, body=entry['body'])
-                message.save()
-            else:
-                return HttpResponseForbidden('No permission to post message')
+            message = Message(sender=user, body=entry['body'])
+            message.save()
+            lms = []
+            for lesson_id in entry['lesson_ids']:
+                try:
+                    lesson = Lesson.objects.get(id=lesson_id)
+                except Lesson.DoesNotExist:
+                    message.delete()
+                    return HttpResponseNotFound('Lesson does not exist')
+                valid_usernames = [lesson.teacher.username, 'admin']
+                for lesson_reg in LessonReg.objects.filter(lesson=lesson):
+                    if lesson_reg.student:
+                        valid_usernames.append(lesson_reg.student.username)
+                if user.username in valid_usernames:
+                    lms.append(LessonMessage(lesson=lesson, message=message))
+                else:
+                    message.delete()
+                    return HttpResponseForbidden('No permission to post message')
+
+            LessonMessage.objects.bulk_create(lms)
 
         elif 'delete' in data:
             qs = Message.objects.filter(id=data['delete']['message_id'])
@@ -256,15 +262,17 @@ def lesson_messages(request):
                             content_type='application/json')
 
     else:
-        lessons = Lesson.objects.filter(teacher=user)
-        lessons = [lesson for lesson in lessons]
-        for lesson_reg in LessonReg.objects.filter(student=user):
-            if lesson_reg.lesson not in lessons:
-                lessons.append(lesson_reg.lesson)
-        messages = Message.objects.filter(lesson__in=lessons).order_by('-id')
+        teach_lessons, study_lessons = query_user_lessons(user)
+
+        lms = LessonMessage.objects.filter(
+            lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
+
         response = []
-        for message in messages:
-            response.append(message.dictify())
+        for msg, lsn in groupby(lms, key=lambda x: x.message):
+            response.append({'message': msg.dictify(), 'lessons': [x.lesson.dictify() for x in list(lsn)]})
+
+        response.sort(key=lambda x: x['message']['creation_time'])
+        response.reverse()
 
         return HttpResponse(json.dumps(response, cls=DateEncoder),
                             content_type='application/json')
@@ -448,14 +456,21 @@ def debug_reset_db(request):
                                           use_time='2014-06-22 15:30:00' if i < 3 else None) for i in range(5)]
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
-        message = Message(lesson=lesson, sender=user,
+        message = Message(sender=user,
                           body='Please bring your own guitar for the class. Rent Guitar program is no longer '
                                'available.',
                           creation_time='2014-06-22 15:30:00Z')
         message.save()
-        message = Message(lesson=lesson, sender=student,
+        lesson_message = LessonMessage(lesson=lesson, message=message)
+        lesson_message.save()
+
+        message = Message(sender=student,
                           body='I love this lesson. Definitely going to recommend to my friends.')
         message.save()
+        lesson_message = LessonMessage(lesson=lesson, message=message)
+        lesson_message.save()
+        lesson_message = LessonMessage(lesson=lesson_2, message=message)
+        lesson_message.save()
 
         if is_json_request(request):
             return HttpResponse(json.dumps({}),
