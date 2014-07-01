@@ -271,8 +271,7 @@ def lesson_messages(request):
         for msg, lsn in groupby(lms, key=lambda x: x.message):
             response.append({'message': msg.dictify(), 'lessons': [x.lesson.dictify() for x in list(lsn)]})
 
-        response.sort(key=lambda x: x['message']['creation_time'])
-        response.reverse()
+        response.sort(key=lambda x: -x['message']['message_id'])
 
         return HttpResponse(json.dumps(response, cls=DateEncoder),
                             content_type='application/json')
@@ -398,55 +397,72 @@ def update_lesson_reg_and_logs(request):
 def debug_reset_db(request):
     if request.method == 'POST':
         User.objects.exclude(username='admin').delete()
-        user = User(username='test', email='test@test.com', first_name='Awesome', last_name='Teacher')
-        user.set_password('test')
-        user.save()
+        elsa = User(username='elsa', email='elsa@frozen.com', first_name='Queen', last_name='Elsa')
+        elsa.set_password('test')
+        elsa.save()
 
-        student = User(username='student', email='student@test.com', first_name='Great', last_name='Student')
-        student.set_password('test')
-        student.save()
+        anna = User(username='anna', email='anna@frozen.com', first_name='Princess', last_name='Anna')
+        anna.set_password('test')
+        anna.save()
 
-        teacher = User(username='teacher', email='teacher@test.com')
-        teacher.set_password('test')
-        teacher.save()
+        chris = User(username='chris', first_name='Christof', last_name='Iceminer')
+        chris.set_password('test')
+        chris.save()
+
+        troll = User(username='troll', first_name='Mountain', last_name='Troll')
+        troll.set_password('test')
+        troll.save()
+
+        olaf = User(username='olaf', email='olaf@fronzen.com')
+        olaf.set_password('test')
+        olaf.save()
 
         UserProfile.objects.all().delete()
-        user_profile = UserProfile(user=user)
+        user_profile = UserProfile(user=elsa)
         user_profile.save()
-        user_profile = UserProfile(user=student)
+        user_profile = UserProfile(user=anna)
         user_profile.save()
-        user_profile = UserProfile(user=teacher)
+        user_profile = UserProfile(user=olaf)
+        user_profile.save()
+        user_profile = UserProfile(user=troll)
+        user_profile.save()
+        user_profile = UserProfile(user=chris)
         user_profile.save()
 
         Lesson.objects.all().delete()
-        lesson = Lesson(teacher=user,
-                        name='Folk Guitar Basics',
-                        description='An introductory lesson for people who want to pick up guitar fast with no '
+        magic_lesson = Lesson(teacher=elsa,
+                        name='Cool Magic Basics',
+                        description='An introductory lesson for people who want to learn cool magic fast with no '
                                     'previous experience')
-        lesson.save()
+        magic_lesson.save()
 
-        lesson_2 = Lesson(teacher=teacher,
-                          name='Practical Fitness',
-                          description='You can be as lazy as you like. Fitness is still guaranteed. Yes it is '
+        love_lesson = Lesson(teacher=olaf,
+                          name='Practical Love Advice',
+                          description='You can be as lazy as you like, yet Love is still guaranteed. Yes it is '
                                       'realistic if you join now.')
-        lesson_2.save()
+        love_lesson.save()
+
+
+        medic_lesson = Lesson(teacher=troll,
+                              name='Expert Medical Tricks',
+                              description='Got a brain damage or wanna cure one? Join now and you will learn in no time')
+        medic_lesson.save()
+
 
         LessonReg.objects.all().delete()
-        lesson_reg_1 = LessonReg(lesson=lesson,
-                                 student_first_name='Emma',
-                                 student_last_name='Wang')
+        lesson_reg_1 = LessonReg(lesson=magic_lesson,
+                                 student_first_name='Prince',
+                                 student_last_name='Hans')
         lesson_reg_1.save()
-        lesson_reg_2 = LessonReg(lesson=lesson,
-                                 student_first_name='Tia',
-                                 student_last_name='Wang')
+        lesson_reg_2 = LessonReg(lesson=magic_lesson,
+                                 student_first_name='Snow',
+                                 student_last_name='Giant')
         lesson_reg_2.save()
 
-        lesson_reg_3 = LessonReg(lesson=lesson, student=student,
-                                 student_first_name=student.first_name,
-                                 student_last_name=student.last_name)
+        lesson_reg_3 = LessonReg(lesson=magic_lesson, student=anna)
         lesson_reg_3.save()
 
-        LessonReg(lesson=lesson_2, student=user).save()
+        LessonReg(lesson=love_lesson, student=elsa).save()
 
         LessonRegLog.objects.all().delete()
         lesson_reg_logs_1 = [LessonRegLog(lesson_reg=lesson_reg_1,
@@ -456,20 +472,20 @@ def debug_reset_db(request):
                                           use_time='2014-06-22 15:30:00' if i < 3 else None) for i in range(5)]
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
 
-        message = Message(sender=user,
-                          body='Please bring your own guitar for the class. Rent Guitar program is no longer '
+        message = Message(sender=elsa,
+                          body='Please bring your own winter coat to the class. Renting program is no longer '
                                'available.',
                           creation_time='2014-06-22 15:30:00Z')
         message.save()
-        lesson_message = LessonMessage(lesson=lesson, message=message)
+        lesson_message = LessonMessage(lesson=magic_lesson, message=message)
         lesson_message.save()
 
-        message = Message(sender=student,
+        message = Message(sender=anna,
                           body='I love this lesson. Definitely going to recommend to my friends.')
         message.save()
-        lesson_message = LessonMessage(lesson=lesson, message=message)
+        lesson_message = LessonMessage(lesson=magic_lesson, message=message)
         lesson_message.save()
-        lesson_message = LessonMessage(lesson=lesson_2, message=message)
+        lesson_message = LessonMessage(lesson=love_lesson, message=message)
         lesson_message.save()
 
         if is_json_request(request):

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -26,6 +27,7 @@ class UserProfile(models.Model):
              'display_name': (self.user.username if self.user.first_name == '' and self.user.last_name == ''
                               else ' '.join([self.user.first_name, self.user.last_name])),
              'email': self.user.email,
+             'creation_time': datetime.strftime(self.user.date_joined, "%Y-%m-%d %H:%M:%SZ"),
              'data': self.data}
         if update_with is not None:
             d.update(update_with)
