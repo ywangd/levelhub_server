@@ -5,6 +5,7 @@ from django.db import models
 from django.contrib.auth.models import User
 
 from levelhub.utils import utcnow
+from levelhub.consts import *
 
 
 JSON_NULL = json.dumps({})
@@ -50,6 +51,7 @@ class Lesson(models.Model):
              'teacher': self.teacher.get_profile().dictify(),
              'name': self.name,
              'description': self.description,
+             'is_active': self.is_active,
              'creation_time': self.creation_time,
              'data': self.data}
         if update_with is not None:
@@ -62,7 +64,7 @@ class LessonReg(models.Model):
     student = models.ForeignKey(User, null=True, blank=True)
     student_first_name = models.CharField(max_length=30)
     student_last_name = models.CharField(max_length=30)
-    is_active = models.BooleanField(default=True)
+    status = models.IntegerField(default=LESSON_REG_ACTIVE)
     creation_time = models.DateTimeField(default=utcnow)
     data = models.TextField(default=JSON_NULL)
 
@@ -78,6 +80,7 @@ class LessonReg(models.Model):
              'student': self.student.get_profile().dictify() if self.student else None,
              'student_first_name': self.student_first_name,
              'student_last_name': self.student_last_name,
+             'status': self.status,
              'creation_time': self.creation_time,
              'data': self.data}
         if update_with is not None:
