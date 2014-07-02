@@ -340,10 +340,26 @@ def update_lesson_reg_and_logs(request):
             except Lesson.DoesNotExist:
                 return HttpResponseNotFound('Lesson does not exist')
             if request.user.username in (lesson.teacher.username, 'admin'):
-                lesson_reg = LessonReg(lesson=lesson,
-                                       student_first_name=entry['first_name'],
-                                       student_last_name=entry['last_name'],
-                                       data=entry['data'])
+                if 'student_id' in entry:
+                    try:
+                        student = User.objects.get(id=entry['student_id'])
+                    except User.DoesNotExist:
+                        return HttpResponseNotFound('User does not exist')
+                    try:  # avoid duplicate enrollment
+                        LessonReg.objects.get(lesson=lesson, student=student)
+                        return HttpResponseBadRequest("User is already enrolled")
+                    except LessonReg.DoesNotExist:
+                        pass
+                    lesson_reg = LessonReg(lesson=lesson,
+                                           student=student,
+                                           student_first_name=student.first_name,
+                                           student_last_name=student.last_name,
+                                           data=entry['data'])
+                else:
+                    lesson_reg = LessonReg(lesson=lesson,
+                                           student_first_name=entry['first_name'],
+                                           student_last_name=entry['last_name'],
+                                           data=entry['data'])
                 lesson_reg.save()
             else:
                 return HttpResponseForbidden('No permission to add new student')
