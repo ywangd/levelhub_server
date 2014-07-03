@@ -15,6 +15,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User)
     # avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
     website = models.URLField(blank=True)
+    about = models.CharField(max_length=1024)
     data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
@@ -28,6 +29,7 @@ class UserProfile(models.Model):
              'display_name': (self.user.username if self.user.first_name == '' and self.user.last_name == ''
                               else ' '.join([self.user.first_name, self.user.last_name])),
              'email': self.user.email,
+             'about': self.about,
              'creation_time': datetime.strftime(self.user.date_joined, "%Y-%m-%d %H:%M:%SZ"),
              'data': self.data}
         if update_with is not None:

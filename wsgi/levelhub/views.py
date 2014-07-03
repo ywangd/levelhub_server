@@ -224,11 +224,26 @@ def get_lesson_reg_logs(request, reg_id):
 def user_search(request):
     phrase = request.GET['phrase']
     users = User.objects.filter(Q(username__contains=phrase)
-                        | Q(first_name__contains=phrase)
-                        | Q(last_name__contains=phrase)).exclude(username='admin').exclude(username=request.user.username)
+                                | Q(first_name__contains=phrase)
+                                | Q(last_name__contains=phrase)).exclude(username='admin').exclude(
+        username=request.user.username)
     response = []
     for user in users:
         response.append(user.get_profile().dictify())
+
+    return HttpResponse(json.dumps(response, cls=DateEncoder),
+                        content_type='application/json')
+
+
+@login_required
+def lesson_search(request):
+    phrase = request.GET['phrase']
+    lessons = Lesson.objects.filter(Q(name__contains=phrase)
+                                | Q(description__contains=phrase))
+    response = []
+    for lesson in lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response.append(lesson.dictify({'nregs': nregs}))
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
                         content_type='application/json')
@@ -436,7 +451,7 @@ def debug_reset_db(request):
         anna.set_password('test')
         anna.save()
 
-        chris = User(username='chris', first_name='Christof', last_name='Iceminer')
+        chris = User(username='kris', first_name='Kristoff', last_name='Iceminer')
         chris.set_password('test')
         chris.save()
 
@@ -451,7 +466,9 @@ def debug_reset_db(request):
         UserProfile.objects.all().delete()
         user_profile = UserProfile(user=elsa)
         user_profile.save()
-        user_profile = UserProfile(user=anna)
+        user_profile = UserProfile(user=anna,
+                                   about="I grow up in a castle. My sister and me use to be very close when we were "
+                                         "little. But one day she just shut me out and I never know why.")
         user_profile.save()
         user_profile = UserProfile(user=olaf)
         user_profile.save()
@@ -475,7 +492,8 @@ def debug_reset_db(request):
 
         medic_lesson = Lesson(teacher=troll,
                               name='Expert Medical Tricks',
-                              description='Got a brain damage or wanna cure one? Join now and you will learn in no time')
+                              description='Got a brain damage or wanna cure one? Join now and you will learn in no '
+                                          'time')
         medic_lesson.save()
 
         LessonReg.objects.all().delete()
@@ -484,7 +502,7 @@ def debug_reset_db(request):
                                  student_last_name='Hans')
         lesson_reg_1.save()
         lesson_reg_2 = LessonReg(lesson=magic_lesson,
-                                 student_first_name='Snow',
+                                 student_first_name='Marshmallow',
                                  student_last_name='Giant')
         lesson_reg_2.save()
 
