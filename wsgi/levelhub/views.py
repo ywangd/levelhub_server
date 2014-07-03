@@ -37,10 +37,9 @@ def add_header(func):
     return func_header_added
 
 
-def query_user_lessons(user):
-    teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
-    study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
-    return (teach_lessons, study_lessons)
+def json_response(d):
+    return HttpResponse(json.dumps(d, cls=DateEncoder),
+                        content_type='application/json')
 
 
 def home(request):
@@ -122,6 +121,14 @@ def user_logout(request):
     else:
         return HttpResponseRedirect('/')
 
+# Get the lessons an user teaches. Anyone can view an user's teaches
+def _get_teach_lessons(user):
+    lessons = Lesson.objects.filter(teacher=user)
+    response = []
+    for lesson in lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        response.append(lesson.dictify({'nregs': nregs}))
+    return response
 
 @login_required
 def get_teach_lessons(request, user_id):
@@ -130,46 +137,45 @@ def get_teach_lessons(request, user_id):
     except User.DoesNotExist:
         return HttpResponseNotFound('User does not exist')
 
-    lessons = Lesson.objects.filter(teacher=user)
-    response = []
-    for lesson in lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response.append(lesson.dictify({'nregs': nregs}))
-
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
+    return json_response(_get_teach_lessons(user))
 
 
-@login_required
-def get_study_lessons(request):
-    # Can only view one's own studies
-    lesson_regs = LessonReg.objects.filter(student=request.user)
+# study lesson is different than teach lesson in that it contains a
+# sub-element pointing to the registration
+# Can only view one's own studies
+def _get_study_lessons(user):
+    lesson_regs = LessonReg.objects.filter(student=user)
     response = []
     for lesson_reg in lesson_regs:
         lesson = lesson_reg.lesson
         nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response.append(lesson.dictify({'nregs': nregs}))
-
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
-
+        d = lesson.dictify({'nregs': nregs})
+        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
+        d['registration'] = {
+            'reg_id': lesson_reg.id,
+            'status': lesson_reg.status,
+            'creation_time': lesson_reg.creation_time,
+            'data': lesson_reg.data,
+            'total': lesson_reg_logs.count(),
+            'unused': lesson_reg_logs.filter(use_time=None).count(),
+        }
+        response.append(d)
+    return response
 
 @login_required
+def get_study_lessons(request):
+    return json_response(_get_study_lessons(request.user))
+
+
+# Get teach and study lessons for the requesting user
+@login_required
 def get_user_lessons(request):
-    teach_lessons, study_lessons = query_user_lessons(request.user)
-    response = {'teach': [], 'study': []}
-    for lesson in teach_lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response['teach'].append(lesson.dictify({'nregs': nregs}))
-
-    for lesson in study_lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
-        response['study'].append(lesson.dictify({'nregs': nregs}))
-
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
+    return json_response({'teach': _get_teach_lessons(request.user),
+                          'study': _get_study_lessons(request.user)})
 
 
+# Get all registration of a lesson, lesson regs can only be viewed
+# if the requesting user is the teacher or a student of the lesson
 @login_required
 def get_lesson_regs(request, lesson_id):
     try:
@@ -178,7 +184,10 @@ def get_lesson_regs(request, lesson_id):
         return HttpResponseNotFound('Lesson does not exist')
 
     if request.user.username not in (lesson.teacher.username, 'admin'):
-        return HttpResponseForbidden('No permission to view registration details')
+        try:
+            LessonReg.objects.get(student=request.user)
+        except LessonReg.DoesNotExist:
+            return HttpResponseForbidden('No permission to view registration details')
 
     lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id)
     response = []
@@ -212,7 +221,7 @@ def get_lesson_reg_logs(request, reg_id):
         return HttpResponseForbidden('No permission to view lesson registration logs')
 
     response = []
-    lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
+    lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg).order_by("id")
     for lesson_reg_log in lesson_reg_logs:
         response.append(lesson_reg_log.dictify())
 
@@ -239,7 +248,7 @@ def user_search(request):
 def lesson_search(request):
     phrase = request.GET['phrase']
     lessons = Lesson.objects.filter(Q(name__contains=phrase)
-                                | Q(description__contains=phrase))
+                                    | Q(description__contains=phrase))
     response = []
     for lesson in lessons:
         nregs = LessonReg.objects.filter(lesson=lesson).count()
@@ -292,7 +301,8 @@ def lesson_messages(request):
                             content_type='application/json')
 
     else:
-        teach_lessons, study_lessons = query_user_lessons(user)
+        teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
+        study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
 
         lms = LessonMessage.objects.filter(
             lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
@@ -509,7 +519,8 @@ def debug_reset_db(request):
         lesson_reg_3 = LessonReg(lesson=magic_lesson, student=anna)
         lesson_reg_3.save()
 
-        LessonReg(lesson=love_lesson, student=elsa).save()
+        lesson_reg_4 = LessonReg(lesson=love_lesson, student=elsa)
+        lesson_reg_4.save()
 
         LessonRegLog.objects.all().delete()
         lesson_reg_logs_1 = [LessonRegLog(lesson_reg=lesson_reg_1,
@@ -518,6 +529,10 @@ def debug_reset_db(request):
         lesson_reg_logs_2 = [LessonRegLog(lesson_reg=lesson_reg_2,
                                           use_time='2014-06-22 15:30:00' if i < 3 else None) for i in range(5)]
         LessonRegLog.objects.bulk_create(lesson_reg_logs_2)
+
+        lesson_reg_logs = [LessonRegLog(lesson_reg=lesson_reg_4,
+                                        use_time='2014-07-01 16:30:00' if i < 8 else None) for i in range(18)]
+        LessonRegLog.objects.bulk_create(lesson_reg_logs)
 
         message = Message(sender=elsa,
                           body='Please bring your own winter coat to the class. Renting program is no longer '
