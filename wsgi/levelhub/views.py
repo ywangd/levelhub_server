@@ -184,13 +184,16 @@ def get_user_lessons(request):
 @login_required
 def get_lesson_regs(request, lesson_id):
     try:
-        lesson = Lesson.objects.get(id=lesson_id)
+        lesson = Lesson.objects.get(Q(id=lesson_id) & ~Q(status=LESSON_DELETED))
     except Lesson.DoesNotExist:
         return HttpResponseNotFound('Lesson does not exist')
 
+    # Only teacher or students of the lesson can view the lesson registration
     if request.user.username not in (lesson.teacher.username, 'admin'):
         try:
-            LessonReg.objects.get(student=request.user)
+            LessonReg.objects.get(Q(lesson=lesson)
+                                  & Q(student=request.user)
+                                  & ~Q(status=LESSON_REG_DELETED))
         except LessonReg.DoesNotExist:
             return HttpResponseForbidden('No permission to view registration details')
 
@@ -213,7 +216,7 @@ def get_lesson_regs(request, lesson_id):
 @login_required
 def get_lesson_reg_logs(request, reg_id):
     try:
-        lesson_reg = LessonReg.objects.get(id=reg_id)
+        lesson_reg = LessonReg.objects.get(Q(id=reg_id) & ~Q(status=LESSON_REG_DELETED))
     except LessonReg.DoesNotExist:
         return HttpResponseNotFound('Lesson registration does not exist')
 
@@ -276,7 +279,7 @@ def lesson_messages(request):
             lms = []
             for lesson_id in entry['lesson_ids']:
                 try:
-                    lesson = Lesson.objects.get(id=lesson_id)
+                    lesson = Lesson.objects.get(Q(id=lesson_id) & ~Q(status=LESSON_DELETED))
                 except Lesson.DoesNotExist:
                     message.delete()
                     return HttpResponseNotFound('Lesson does not exist')
@@ -347,7 +350,7 @@ def update_lesson(request):
             qs = Lesson.objects.filter(id=lesson_id).exclude(status=LESSON_DELETED)
             if qs.exists():
                 if request.user.username in (qs.first().teacher.username, 'admin'):
-                    qs.delete()
+                    qs.update(status=LESSON_DELETED)  # mark the lesson as deleted
                 else:
                     return HttpResponseForbidden('No permission to delete lesson')
             else:
@@ -367,33 +370,67 @@ def update_lesson_reg_and_logs(request):
         if 'create' in data:
             entry = data['create']
             try:
-                lesson = Lesson.objects.get(id=entry['lesson_id'])
+                lesson = Lesson.objects.get(Q(id=entry['lesson_id']) & ~Q(status=LESSON_DELETED))
             except Lesson.DoesNotExist:
                 return HttpResponseNotFound('Lesson does not exist')
-            if request.user.username in (lesson.teacher.username, 'admin'):
-                if 'student_id' in entry:
+            if request.user.username in (lesson.teacher.username, 'admin'):  # enroll
+                if 'student_id' in entry:  # online enroll
                     try:
                         student = User.objects.get(id=entry['student_id'])
                     except User.DoesNotExist:
                         return HttpResponseNotFound('User does not exist')
                     try:  # avoid duplicate enrollment
-                        LessonReg.objects.get(lesson=lesson, student=student)
-                        return HttpResponseBadRequest("User is already enrolled")
+                        lesson_reg = LessonReg.objects.get(Q(lesson=lesson)
+                                                           & Q(student=student)
+                                                           & ~Q(status=LESSON_REG_DELETED))
+                        if lesson_reg.status == LESSON_REG_PENDING_ENROLL:
+                            return HttpResponseBadRequest(
+                                "A previous enroll request is in effect and pending for student approval")
+                        elif lesson_reg.status == LESSON_REG_PENDING_JOIN:
+                            return HttpResponseBadRequest(
+                                "A previous join request is in effect and pending for teacher approval")
+                        else:
+                            return HttpResponseBadRequest("User is already enrolled")
                     except LessonReg.DoesNotExist:
                         pass
                     lesson_reg = LessonReg(lesson=lesson,
                                            student=student,
                                            student_first_name=student.first_name,
                                            student_last_name=student.last_name,
-                                           data=entry['data'])
-                else:
+                                           data=entry['daytimes'],
+                                           status=LESSON_REG_PENDING_ENROLL)
+                else:  # offline enroll
                     lesson_reg = LessonReg(lesson=lesson,
                                            student_first_name=entry['first_name'],
                                            student_last_name=entry['last_name'],
-                                           data=entry['data'])
+                                           data=entry['daytimes'])
                 lesson_reg.save()
-            else:
-                return HttpResponseForbidden('No permission to add new student')
+
+            else:  # join
+                try:
+                    student = User.objects.get(id=entry['student_id'])
+                except User.DoesNotExist:
+                    return HttpResponseNotFound('User does not exist')
+                try:  # avoid duplicate enrollment
+                    lesson_reg = LessonReg.objects.get(Q(lesson=lesson)
+                                                       & Q(student=student)
+                                                       & ~Q(status=LESSON_REG_DELETED))
+                    if lesson_reg.status == LESSON_REG_PENDING_ENROLL:
+                        return HttpResponseBadRequest(
+                            "A previous enroll request is in effect and pending for student approval")
+                    elif lesson_reg.status == LESSON_REG_PENDING_JOIN:
+                        return HttpResponseBadRequest(
+                            "A previous join request is in effect and pending for teacher approval")
+                    else:
+                        return HttpResponseBadRequest("User is already enrolled")
+                except LessonReg.DoesNotExist:
+                    pass
+                lesson_reg = LessonReg(lesson=lesson,
+                                       student=student,
+                                       student_first_name=student.first_name,
+                                       student_last_name=student.last_name,
+                                       status=LESSON_REG_PENDING_JOIN)
+                lesson_reg.save()
 
         elif 'update' in data:
             entry = data['update']
@@ -442,7 +479,7 @@ def update_lesson_reg_and_logs(request):
             qs = LessonReg.objects.filter(id=reg_id).exclude(status=LESSON_REG_DELETED)
             if qs.exists():
                 if request.user.username in (qs.first().lesson.teacher.username, 'admin'):
-                    qs.delete()
+                    qs.update(status=LESSON_REG_DELETED)  # mark the lesson registration as deleted
                 else:
                     return HttpResponseForbidden('No permission to delete lesson registration')
             else:
@@ -479,7 +516,7 @@ def debug_reset_db(request):
         olaf.set_password('test')
         olaf.save()
 
-        hans = User(username='hans', email='hans@fronzen.com', first_name='Prince', last_name='hans')
+        hans = User(username='hans', email='hans@fronzen.com', first_name='Prince', last_name='Hans')
         hans.set_password('test')
         hans.save()
 
@@ -500,7 +537,6 @@ def debug_reset_db(request):
         user_profile = UserProfile(user=chris)
         user_profile.save()
         UserProfile(user=hans).save()
-
 
         Lesson.objects.all().delete()
         magic_lesson = Lesson(teacher=elsa,
