@@ -15,6 +15,7 @@ from django.db.models import Q
 from levelhub.forms import UserSignupForm, UserForm
 from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message, LessonMessage, UserMessage
 from levelhub.utils import DateEncoder
+from levelhub.consts import *
 
 
 def is_json_request(request):
@@ -121,14 +122,16 @@ def user_logout(request):
     else:
         return HttpResponseRedirect('/')
 
+
 # Get the lessons an user teaches. Anyone can view an user's teaches
 def _get_teach_lessons(user):
-    lessons = Lesson.objects.filter(teacher=user)
+    lessons = Lesson.objects.filter(teacher=user).exclude(status=LESSON_DELETED)
     response = []
     for lesson in lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
         response.append(lesson.dictify({'nregs': nregs}))
     return response
+
 
 @login_required
 def get_teach_lessons(request, user_id):
@@ -144,23 +147,25 @@ def get_teach_lessons(request, user_id):
 # sub-element pointing to the registration
 # Can only view one's own studies
 def _get_study_lessons(user):
-    lesson_regs = LessonReg.objects.filter(student=user)
+    lesson_regs = LessonReg.objects.filter(student=user).exclude(status=LESSON_REG_DELETED)
     response = []
     for lesson_reg in lesson_regs:
         lesson = lesson_reg.lesson
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
         d = lesson.dictify({'nregs': nregs})
         lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
         d['registration'] = {
             'reg_id': lesson_reg.id,
             'status': lesson_reg.status,
             'creation_time': lesson_reg.creation_time,
+            'daytimes': lesson_reg.daytimes,
             'data': lesson_reg.data,
             'total': lesson_reg_logs.count(),
             'unused': lesson_reg_logs.filter(use_time=None).count(),
         }
         response.append(d)
     return response
+
 
 @login_required
 def get_study_lessons(request):
@@ -189,7 +194,7 @@ def get_lesson_regs(request, lesson_id):
         except LessonReg.DoesNotExist:
             return HttpResponseForbidden('No permission to view registration details')
 
-    lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id)
+    lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id).exclude(status=LESSON_REG_DELETED)
     response = []
     for lesson_reg in lesson_regs:
         lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
@@ -248,10 +253,10 @@ def user_search(request):
 def lesson_search(request):
     phrase = request.GET['phrase']
     lessons = Lesson.objects.filter(Q(name__contains=phrase)
-                                    | Q(description__contains=phrase))
+                                    | Q(description__contains=phrase)).exclude(status=LESSON_DELETED)
     response = []
     for lesson in lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).count()
+        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
         response.append(lesson.dictify({'nregs': nregs}))
 
     return HttpResponse(json.dumps(response, cls=DateEncoder),
@@ -276,7 +281,7 @@ def lesson_messages(request):
                     message.delete()
                     return HttpResponseNotFound('Lesson does not exist')
                 valid_usernames = [lesson.teacher.username, 'admin']
-                for lesson_reg in LessonReg.objects.filter(lesson=lesson):
+                for lesson_reg in LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED):
                     if lesson_reg.student:
                         valid_usernames.append(lesson_reg.student.username)
                 if user.username in valid_usernames:
@@ -301,8 +306,9 @@ def lesson_messages(request):
                             content_type='application/json')
 
     else:
-        teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user)]
-        study_lessons = [lesson_reg.lesson for lesson_reg in LessonReg.objects.filter(student=user)]
+        teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user).exclude(status=LESSON_DELETED)]
+        study_lessons = [lesson_reg.lesson for lesson_reg in
+                         LessonReg.objects.filter(student=user).exclude(status=LESSON_REG_DELETED)]
 
         lms = LessonMessage.objects.filter(
             lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
@@ -328,7 +334,7 @@ def update_lesson(request):
         elif 'update' in data:
             entry = data['update']
             lesson_id = entry.pop('lesson_id')
-            qs = Lesson.objects.filter(id=lesson_id)
+            qs = Lesson.objects.filter(id=lesson_id).exclude(status=LESSON_DELETED)
             if qs.exists():
                 if request.user.username in (qs.first().teacher.username, 'admin'):
                     qs.update(**entry)
@@ -338,7 +344,7 @@ def update_lesson(request):
                 return HttpResponseNotFound('Lesson does not exist')
         elif 'delete' in data:
             lesson_id = data['delete']['lesson_id']
-            qs = Lesson.objects.filter(id=lesson_id)
+            qs = Lesson.objects.filter(id=lesson_id).exclude(status=LESSON_DELETED)
             if qs.exists():
                 if request.user.username in (qs.first().teacher.username, 'admin'):
                     qs.delete()
@@ -392,7 +398,7 @@ def update_lesson_reg_and_logs(request):
         elif 'update' in data:
             entry = data['update']
             reg_id = entry.pop('reg_id')
-            qs = LessonReg.objects.filter(id=reg_id)
+            qs = LessonReg.objects.filter(id=reg_id).exclude(status=LESSON_REG_DELETED)
             if qs.exists():
                 lesson_reg = qs.first()
                 if request.user.username in (lesson_reg.lesson.teacher.username, 'admin'):
@@ -433,7 +439,7 @@ def update_lesson_reg_and_logs(request):
 
         elif 'delete' in data:
             reg_id = data['delete']['reg_id']
-            qs = LessonReg.objects.filter(id=reg_id)
+            qs = LessonReg.objects.filter(id=reg_id).exclude(status=LESSON_REG_DELETED)
             if qs.exists():
                 if request.user.username in (qs.first().lesson.teacher.username, 'admin'):
                     qs.delete()
@@ -473,8 +479,15 @@ def debug_reset_db(request):
         olaf.set_password('test')
         olaf.save()
 
+        hans = User(username='hans', email='hans@fronzen.com', first_name='Prince', last_name='hans')
+        hans.set_password('test')
+        hans.save()
+
         UserProfile.objects.all().delete()
-        user_profile = UserProfile(user=elsa)
+        user_profile = UserProfile(user=elsa,
+                                   about="Let it go. Let it go. Can't hold back anymore. Let it go. Let it go. Turn "
+                                         "away and slam the door. I don't care what they are going to say. Let the "
+                                         "storm rage on. Cold never bothered me anyway.")
         user_profile.save()
         user_profile = UserProfile(user=anna,
                                    about="I grow up in a castle. My sister and me use to be very close when we were "
@@ -486,6 +499,8 @@ def debug_reset_db(request):
         user_profile.save()
         user_profile = UserProfile(user=chris)
         user_profile.save()
+        UserProfile(user=hans).save()
+
 
         Lesson.objects.all().delete()
         magic_lesson = Lesson(teacher=elsa,
@@ -503,13 +518,11 @@ def debug_reset_db(request):
         medic_lesson = Lesson(teacher=troll,
                               name='Expert Medical Tricks',
                               description='Got a brain damage or wanna cure one? Join now and you will learn in no '
-                                          'time')
+                                          'time.')
         medic_lesson.save()
 
         LessonReg.objects.all().delete()
-        lesson_reg_1 = LessonReg(lesson=magic_lesson,
-                                 student_first_name='Prince',
-                                 student_last_name='Hans')
+        lesson_reg_1 = LessonReg(lesson=magic_lesson, student=hans)
         lesson_reg_1.save()
         lesson_reg_2 = LessonReg(lesson=magic_lesson,
                                  student_first_name='Marshmallow',

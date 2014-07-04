@@ -8,9 +8,6 @@ from levelhub.utils import utcnow
 from levelhub.consts import *
 
 
-JSON_NULL = json.dumps({})
-
-
 class UserProfile(models.Model):
     user = models.OneToOneField(User)
     # avatar = models.ImageField(upload_to='avatar', null=True, blank=True)
@@ -30,6 +27,7 @@ class UserProfile(models.Model):
                               else ' '.join([self.user.first_name, self.user.last_name])),
              'email': self.user.email,
              'about': self.about,
+             'last_login': datetime.strftime(self.user.last_login, "%Y-%m-%d %H:%M:%SZ"),
              'creation_time': datetime.strftime(self.user.date_joined, "%Y-%m-%d %H:%M:%SZ"),
              'data': self.data}
         if update_with is not None:
@@ -41,7 +39,7 @@ class Lesson(models.Model):
     teacher = models.ForeignKey(User)
     name = models.CharField(max_length=64)
     description = models.CharField(max_length=1024)
-    is_active = models.BooleanField(default=True)
+    status = models.IntegerField(default=LESSON_ACTIVE)
     creation_time = models.DateTimeField(default=utcnow)
     data = models.TextField(default=JSON_NULL)
 
@@ -53,7 +51,7 @@ class Lesson(models.Model):
              'teacher': self.teacher.get_profile().dictify(),
              'name': self.name,
              'description': self.description,
-             'is_active': self.is_active,
+             'status': self.status,
              'creation_time': self.creation_time,
              'data': self.data}
         if update_with is not None:
@@ -68,6 +66,7 @@ class LessonReg(models.Model):
     student_last_name = models.CharField(max_length=30)
     status = models.IntegerField(default=LESSON_REG_ACTIVE)
     creation_time = models.DateTimeField(default=utcnow)
+    daytimes = models.CharField(max_length=512)  # comma separated class times
     data = models.TextField(default=JSON_NULL)
 
     def __unicode__(self):
@@ -84,6 +83,7 @@ class LessonReg(models.Model):
              'student_last_name': self.student_last_name,
              'status': self.status,
              'creation_time': self.creation_time,
+             'daytimes': self.daytimes,
              'data': self.data}
         if update_with is not None:
             d.update(update_with)
