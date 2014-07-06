@@ -13,7 +13,8 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 
 from levelhub.forms import UserSignupForm, UserForm
-from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message, LessonMessage, UserMessage
+from levelhub.models import UserProfile, Lesson, LessonReg, LessonRegLog, Message, LessonMessage, UserMessage, \
+    LessonRequest
 from levelhub.utils import DateEncoder
 from levelhub.consts import *
 
@@ -38,11 +39,124 @@ def add_header(func):
     return func_header_added
 
 
-def json_response(d):
-    return HttpResponse(json.dumps(d, cls=DateEncoder),
-                        content_type='application/json')
+#############################################################################
+# Helper functions
+#############################################################################
+
+# package the information as json and return to user
+# Always add pulse for each request. A pulse carries small size notification
+# information, such as number of new requests. So a notification can be displayed
+# at user side.
+def pack_json_response(request, d, add_pulse=True):
+    if add_pulse:
+        j = json.dumps({'pulse': {'n_new_requests': peek_lesson_requests(request.user)},
+                        'main': d},
+                       cls=DateEncoder)
+    else:
+        j = json.dumps(d)
+    return HttpResponse(j, content_type='application/json')
 
 
+def user_get(user_id):
+    try:
+        return User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return None
+
+
+def lesson_get(lesson_id):
+    try:
+        return Lesson.objects.get(id=lesson_id, status=LESSON_ACTIVE)
+    except Lesson.DoesNotExist:
+        return None
+
+
+def lesson_reg_get(**kwargs):
+    try:
+        return LessonReg.objects.get(status=LESSON_REG_ACTIVE, **kwargs)
+    except LessonReg.DoesNotExist:
+        return None
+
+
+def lesson_reg_log_get(**kwargs):
+    try:
+        return LessonRegLog.objects.get(**kwargs)
+    except LessonRegLog.DoesNotExist:
+        return None
+
+
+def lesson_request_get(**kwargs):
+    try:
+        return LessonRequest.objects.get(**kwargs)
+    except LessonRequest.DoesNotExist:
+        return None
+
+
+def message_get(message_id):
+    try:
+        return Message.objects.get(id=message_id)
+    except Message.DoesNotExist:
+        return None
+
+
+def role_of_lesson(user, lesson):
+    if user.username in [lesson.teacher.username, 'admin']:
+        return ROLE_LESSON_MANAGER
+    elif lesson_reg_get(lesson=lesson, student=user, status=LESSON_REG_ACTIVE):
+        return ROLE_LESSON_STUDENT
+    else:
+        return ROLE_LESSON_NONE
+
+
+# Peek the lesson requests without changing their status
+def peek_lesson_requests(user):
+    # As receiver
+    incoming_requests = LessonRequest.objects.filter(
+        receiver=user, is_new=True)
+    # As sender
+    outgoing_requests = LessonRequest.objects.filter(
+        sender=user, is_new=True)
+
+    return incoming_requests.count() + outgoing_requests.count()
+
+
+# Get the lessons an user teaches. Anyone can view an user's teaches
+def query_teach_lessons(user):
+    lessons = Lesson.objects.filter(teacher=user, status=LESSON_ACTIVE)
+    response = []
+    for lesson in lessons:
+        nregs = LessonReg.objects.filter(lesson=lesson, status=LESSON_REG_ACTIVE).count()
+        response.append(lesson.dictify({'nregs': nregs}))
+    return response
+
+
+# study lesson is different than teach lesson in that it contains a
+# sub-element pointing to the registration
+# Can only view one's own studies
+def query_study_lessons(user):
+    lesson_regs = LessonReg.objects.filter(student=user, status=LESSON_REG_ACTIVE)
+    response = []
+    for lesson_reg in lesson_regs:
+        lesson = lesson_reg.lesson
+        nregs = LessonReg.objects.filter(lesson=lesson, status=LESSON_REG_ACTIVE).count()
+        d = lesson.dictify({'nregs': nregs})
+        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
+        d['registration'] = {
+            'reg_id': lesson_reg.id,
+            'status': lesson_reg.status,
+            'creation_time': lesson_reg.creation_time,
+            'daytimes': lesson_reg.daytimes,
+            'data': lesson_reg.data,
+            'total': lesson_reg_logs.count(),
+            'unused': lesson_reg_logs.filter(use_time=None).count(),
+        }
+        response.append(d)
+    return response
+
+
+#############################################################################
+# Views
+#############################################################################
 def home(request):
     return render(request, 'home/home.html', {'version': django.VERSION})
 
@@ -64,9 +178,9 @@ def register(request):
 
             login(request, user)
             if isJR:
-                return HttpResponse(
-                    json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
-                    content_type='application/json')
+                return pack_json_response(request,
+                                          user.get_profile().dictify(
+                                              {'sessionid': request.session.session_key}))
             else:
                 return HttpResponseRedirect('/')
         else:
@@ -96,9 +210,9 @@ def user_login(request):
         if user:
             login(request, user)
             if isJR:
-                return HttpResponse(
-                    json.dumps(user.get_profile().dictify({'sessionid': request.session.session_key})),
-                    content_type='application/json')
+                return pack_json_response(request,
+                                          user.get_profile().dictify(
+                                              {'sessionid': request.session.session_key}))
             else:
                 return HttpResponseRedirect('/')
         else:
@@ -114,127 +228,11 @@ def user_login(request):
 @login_required
 @csrf_exempt
 def user_logout(request):
-    print 'logging out ...'
     logout(request)
     if is_json_request(request):
-        return HttpResponse(json.dumps({}),
-                            content_type='application/json')
+        return pack_json_response(request, {}, add_pulse=False)
     else:
         return HttpResponseRedirect('/')
-
-
-# Get the lessons an user teaches. Anyone can view an user's teaches
-def _get_teach_lessons(user):
-    lessons = Lesson.objects.filter(teacher=user).exclude(status=LESSON_DELETED)
-    response = []
-    for lesson in lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
-        response.append(lesson.dictify({'nregs': nregs}))
-    return response
-
-
-@login_required
-def get_teach_lessons(request, user_id):
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return HttpResponseNotFound('User does not exist')
-
-    return json_response(_get_teach_lessons(user))
-
-
-# study lesson is different than teach lesson in that it contains a
-# sub-element pointing to the registration
-# Can only view one's own studies
-def _get_study_lessons(user):
-    lesson_regs = LessonReg.objects.filter(student=user).exclude(status=LESSON_REG_DELETED)
-    response = []
-    for lesson_reg in lesson_regs:
-        lesson = lesson_reg.lesson
-        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
-        d = lesson.dictify({'nregs': nregs})
-        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
-        d['registration'] = {
-            'reg_id': lesson_reg.id,
-            'status': lesson_reg.status,
-            'creation_time': lesson_reg.creation_time,
-            'daytimes': lesson_reg.daytimes,
-            'data': lesson_reg.data,
-            'total': lesson_reg_logs.count(),
-            'unused': lesson_reg_logs.filter(use_time=None).count(),
-        }
-        response.append(d)
-    return response
-
-
-@login_required
-def get_study_lessons(request):
-    return json_response(_get_study_lessons(request.user))
-
-
-# Get teach and study lessons for the requesting user
-@login_required
-def get_user_lessons(request):
-    return json_response({'teach': _get_teach_lessons(request.user),
-                          'study': _get_study_lessons(request.user)})
-
-
-# Get all registration of a lesson, lesson regs can only be viewed
-# if the requesting user is the teacher or a student of the lesson
-@login_required
-def get_lesson_regs(request, lesson_id):
-    try:
-        lesson = Lesson.objects.get(Q(id=lesson_id) & ~Q(status=LESSON_DELETED))
-    except Lesson.DoesNotExist:
-        return HttpResponseNotFound('Lesson does not exist')
-
-    # Only teacher or students of the lesson can view the lesson registration
-    if request.user.username not in (lesson.teacher.username, 'admin'):
-        try:
-            LessonReg.objects.get(Q(lesson=lesson)
-                                  & Q(student=request.user)
-                                  & ~Q(status=LESSON_REG_DELETED))
-        except LessonReg.DoesNotExist:
-            return HttpResponseForbidden('No permission to view registration details')
-
-    lesson_regs = LessonReg.objects.filter(lesson__id=lesson_id).exclude(status=LESSON_REG_DELETED)
-    response = []
-    for lesson_reg in lesson_regs:
-        lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
-        total = lesson_reg_logs.count()
-        unused = lesson_reg_logs.filter(use_time=None).count()
-        response.append(lesson_reg.dictify({"total": total, "unused": unused}))
-
-    # Sort student alphabetically
-    response.sort(key=lambda x: x['student']['display_name'] if x['student'] else ' '.join(
-        [x['student_first_name'], x['student_last_name']]))
-
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
-
-
-@login_required
-def get_lesson_reg_logs(request, reg_id):
-    try:
-        lesson_reg = LessonReg.objects.get(Q(id=reg_id) & ~Q(status=LESSON_REG_DELETED))
-    except LessonReg.DoesNotExist:
-        return HttpResponseNotFound('Lesson registration does not exist')
-
-    teacher = lesson_reg.lesson.teacher
-    student = lesson_reg.student
-    users_allowed = [teacher.username, 'admin']
-    if student:
-        users_allowed.append(student.username)
-    if request.user.username not in users_allowed:
-        return HttpResponseForbidden('No permission to view lesson registration logs')
-
-    response = []
-    lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg).order_by("id")
-    for lesson_reg_log in lesson_reg_logs:
-        response.append(lesson_reg_log.dictify())
-
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
 
 
 @login_required
@@ -242,254 +240,419 @@ def user_search(request):
     phrase = request.GET['phrase']
     users = User.objects.filter(Q(username__contains=phrase)
                                 | Q(first_name__contains=phrase)
-                                | Q(last_name__contains=phrase)).exclude(username='admin').exclude(
-        username=request.user.username)
+                                | Q(last_name__contains=phrase)
+                                  & ~Q(username='admin')
+                                & ~Q(username=request.user.username))
     response = []
     for user in users:
         response.append(user.get_profile().dictify())
 
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
+    return pack_json_response(request, response)
 
 
 @login_required
 def lesson_search(request):
     phrase = request.GET['phrase']
     lessons = Lesson.objects.filter(Q(name__contains=phrase)
-                                    | Q(description__contains=phrase)).exclude(status=LESSON_DELETED)
+                                    | Q(description__contains=phrase)
+                                    & Q(status=LESSON_ACTIVE))
     response = []
     for lesson in lessons:
-        nregs = LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED).count()
+        nregs = LessonReg.objects.filter(lesson=lesson, status=LESSON_REG_ACTIVE).count()
         response.append(lesson.dictify({'nregs': nregs}))
 
-    return HttpResponse(json.dumps(response, cls=DateEncoder),
-                        content_type='application/json')
+    return pack_json_response(request, response)
 
 
+# POST to create, update or delete a lesson
+# GET to retrieve all teach and study lessons for the requesting user
 @login_required
 @csrf_exempt
-def lesson_messages(request):
+def process_lessons(request):
     user = request.user
+
     if request.method == 'POST':
         data = json.loads(request.body)
-        if 'create' in data:
-            entry = data['create']
-            message = Message(sender=user, body=entry['body'])
-            message.save()
-            lms = []
-            for lesson_id in entry['lesson_ids']:
-                try:
-                    lesson = Lesson.objects.get(Q(id=lesson_id) & ~Q(status=LESSON_DELETED))
-                except Lesson.DoesNotExist:
-                    message.delete()
-                    return HttpResponseNotFound('Lesson does not exist')
-                valid_usernames = [lesson.teacher.username, 'admin']
-                for lesson_reg in LessonReg.objects.filter(lesson=lesson).exclude(status=LESSON_REG_DELETED):
-                    if lesson_reg.student:
-                        valid_usernames.append(lesson_reg.student.username)
-                if user.username in valid_usernames:
-                    lms.append(LessonMessage(lesson=lesson, message=message))
-                else:
-                    message.delete()
-                    return HttpResponseForbidden('No permission to post message')
+        action = data['action']
 
-            LessonMessage.objects.bulk_create(lms)
+        if 'create' == action:
+            Lesson(teacher=user, name=data['name'], description=data['description']).save()
 
-        elif 'delete' in data:
-            qs = Message.objects.filter(id=data['delete']['message_id'])
-            if qs.exists():
-                if user.username in (qs.first().sender.username, 'admin'):
-                    qs.delete()
-                else:
-                    return HttpResponseForbidden('No permission to delete message')
-            else:
-                return HttpResponseNotFound('Message does not exist')
+        elif 'update' == action:
+            lesson = lesson_get(data['lesson_id'])
+            if not lesson:
+                return HttpResponseNotFound('Lesson does not exist')
+            role = role_of_lesson(user, lesson)
+            if role != ROLE_LESSON_MANAGER:
+                return HttpResponseForbidden('No permission to update lesson')
+            lesson.name = data['name']
+            lesson.description = data['description']
+            lesson.save()
+
+        elif 'delete' == action:
+            lesson = lesson_get(data['lesson_id'])
+            if not lesson:
+                return HttpResponseNotFound('Lesson does not exist')
+            role = role_of_lesson(user, lesson)
+            if role != ROLE_LESSON_MANAGER:
+                return HttpResponseForbidden('No permission to update lesson')
+            lesson.delete()
+
+        else:
+            return HttpResponseBadRequest('Invalid action')
 
         return HttpResponse(json.dumps({}),
                             content_type='application/json')
 
-    else:
-        teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user).exclude(status=LESSON_DELETED)]
-        study_lessons = [lesson_reg.lesson for lesson_reg in
-                         LessonReg.objects.filter(student=user).exclude(status=LESSON_REG_DELETED)]
+    else:  # get teach and study lessons for the requesting user
+        lesson_category = request.GET['category']
 
-        lms = LessonMessage.objects.filter(
-            lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
+        if lesson_category == 'all':
+            return pack_json_response(request, {'teach': query_teach_lessons(user),
+                                                'study': query_study_lessons(user)})
+
+        elif lesson_category == 'teach':
+            user = user_get(request.GET['user_id'])
+            if not user:
+                return HttpResponseNotFound('User does not exist')
+            return pack_json_response(request, query_teach_lessons(user))
+
+        elif lesson_category == 'study':
+            return pack_json_response(request, query_study_lessons(request.user))
+
+
+# POST to action on a single request
+# GET to retrieve all requests for the requesting user
+@login_required
+@csrf_exempt
+def process_lesson_requests(request):
+    user = request.user
+
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        action = data['action']
+
+        if 'enroll' == action:
+
+            lesson = lesson_get(data['lesson_id'])
+            if not lesson:
+                return HttpResponseNotFound('Lesson does not exist')
+
+            if role_of_lesson(user, lesson) != ROLE_LESSON_MANAGER:
+                return HttpResponseForbidden('No permission to enroll student')
+
+            if 'student_first_name' in data and 'student_last_name' in data:  # non-member enroll
+                LessonReg(lesson=lesson,
+                          student_first_name=data['student_first_name'],
+                          student_last_name=data['student_last_name'],
+                          daytimes=data['daytimes']).save()
+            else:  # member enroll
+                student = user_get(data['student_id'])
+                if not student:
+                    return HttpResponseNotFound('User does not exist')
+
+                if lesson_reg_get(lesson=lesson, student=student):
+                    return HttpResponseBadRequest('User is already enrolled')
+
+                if lesson_request_get(sender=user, receiver=student, lesson=lesson):
+                    return HttpResponseBadRequest('Duplicate request')
+
+                LessonRequest(sender=user,
+                              receiver=student,
+                              lesson=lesson,
+                              message=data['message'],
+                              status=REQUEST_ENROLL,
+                              is_new=True).save()
+
+        elif 'join' == action:
+
+            lesson = lesson_get(data['lesson_id'])
+            if not lesson:
+                return HttpResponseNotFound('Lesson does not exist')
+
+            if lesson_reg_get(lesson=lesson, student=user):
+                return HttpResponseBadRequest('You already joined')
+
+            teacher = lesson.teacher
+
+            if lesson_request_get(sender=user, receiver=teacher, lesson=lesson):
+                return HttpResponseBadRequest('Duplicate request')
+
+            LessonRequest(sender=user,
+                          receiver=teacher,
+                          lesson=lesson,
+                          message=data['message'],
+                          status=REQUEST_JOIN,
+                          is_new=True).save()
+
+        elif 'deroll' == action:
+
+            lesson_reg = lesson_reg_get(id=data['reg_id'])
+            if not lesson_reg:
+                return HttpResponseNotFound('Lesson registration does not exist')
+
+            if role_of_lesson(user, lesson_reg.lesson) != ROLE_LESSON_MANAGER:
+                return HttpResponseForbidden('No permission to disenroll student')
+
+            LessonRequest(sender=user,
+                          receiver=lesson_reg.student,
+                          lesson=lesson_reg.lesson,
+                          message=data['message'],
+                          status=REQUEST_DEROLL,
+                          is_new=True).save()
+            # This request is a notice only, i.e. the receiver only gets to dismiss the
+            # message without the options for accept or reject
+            lesson_reg.status = LESSON_REG_DEROLL
+            lesson_reg.save()
+
+        elif 'quit' == action:
+
+            lesson_reg = lesson_reg_get(id=data['reg_id'])
+            if not lesson_reg:
+                return HttpResponseNotFound('Lesson registration does not exist')
+
+            if user.username != lesson_reg.student.username:
+                return HttpResponseForbidden('No permission to quit the lesson registration')
+
+            teacher = lesson_reg.lesson.teacher
+
+            LessonRequest(sender=user,
+                          receiver=teacher,
+                          lesson=lesson_reg.lesson,
+                          message=data['message'],
+                          status=REQUEST_QUIT,
+                          is_new=True).save()
+            # This is also a notice only
+            lesson_reg.status = LESSON_REG_QUIT
+            lesson_reg.save()
+
+        elif 'accept' == action or 'reject' == action:
+
+            lesson_request = lesson_request_get(id=data['req_id'])
+            if not lesson_request:
+                return HttpResponseNotFound('Request does not exist')
+
+            if user.username != lesson_request.receiver.username:
+                return HttpResponseForbidden('No permission to accept request')
+
+            if lesson_request.status not in REQUEST_ACCEPT_OR_REJECT:
+                return HttpResponseBadRequest('The request can only be dismissed')
+
+            if lesson_request.status == REQUEST_ENROLL:
+                if action == 'accept':
+                    lesson_request.status = REQUEST_ENROLL_ACCEPTED
+                    LessonReg(lesson=lesson_request.lesson,
+                              student=lesson_request.receiver,
+                              daytimes=data['daytimes']).save()
+                else:
+                    lesson_request.status = REQUEST_ENROLL_REJECTED
+            elif lesson_request.status == REQUEST_JOIN:
+                if action == 'accept':
+                    lesson_request.status = REQUEST_JOIN_ACCEPTED
+                    LessonReg(lesson=lesson_request.lesson,
+                              student=lesson_request.sender).save()
+                else:
+                    lesson_request.status = REQUEST_JOIN_REJECTED
+            else:
+                return HttpResponseBadRequest('Invalid request status')
+
+            lesson_request.is_new = True
+            lesson_request.save()
+
+        elif 'dismiss' == action:
+
+            lesson_request = lesson_request_get(id=data['req_id'])
+            if not lesson_request:
+                return HttpResponseNotFound('Request does not exist')
+
+            if (lesson_request.status in REQUEST_SENDER_DISMISS
+                and user.username == lesson_request.sender.username) \
+                    or (lesson_request.status in REQUEST_RECEIVER_DISMISS
+                        and user.username == lesson_request.receiver.username):
+                lesson_request.delete()
+            else:
+                return HttpResponseForbidden('No permission to dismiss the request')
+
+        else:
+            return HttpResponseBadRequest('Invalid action')
+
+        return pack_json_response(request, {})
+
+    else:  # method is GET
+        # As receiver
+        incoming_requests = LessonRequest.objects.filter(receiver=user).order_by("-id")
+        # As sender
+        outgoing_requests = LessonRequest.objects.filter(sender=user).order_by("-id")
+        # Mark requests as read
+        incoming_requests.filter(is_new=True).update(is_new=False)
+        outgoing_requests.filter(is_new=True).update(is_new=False)
+        response = {'incoming': [req.dictify() for req in incoming_requests],
+                    'outgoing': [req.dictify() for req in outgoing_requests]}
+        return pack_json_response(request, response)
+
+
+# Get all registration of a lesson or update one lesson registration
+# Note that the creation and deletion of lesson registration are not handled here.
+# Creation and deletion are handled by process_lesson_request.
+@login_required
+@csrf_exempt
+def process_lesson_regs(request):
+    user = request.user
+
+    if request.method == 'POST':  # update a lesson registration
+        data = json.loads(request.body)
+
+        lesson_reg = lesson_reg_get(id=data['reg_id'])
+        if not lesson_reg:
+            return HttpResponseNotFound('Lesson registration does not exist')
+
+        if role_of_lesson(user, lesson_reg.lesson) != ROLE_LESSON_MANAGER:
+            return HttpResponseForbidden('No permission to modify the lesson registration')
+
+        lesson_reg.daytimes = data['daytimes']
+        if 'data' in data:
+            lesson_reg.data = data['data']
+        lesson_reg.save()
+        return pack_json_response(request, {})
+
+    else:  # method is GET
+        lesson = lesson_get(request.GET['lesson_id'])
+        if not lesson:
+            return HttpResponseNotFound('Lesson does not exist')
+
+        role = role_of_lesson(user, lesson)
+        if role == ROLE_LESSON_NONE:
+            return HttpResponseForbidden('No permission view registrations of the lesson')
 
         response = []
-        for msg, lsn in groupby(lms, key=lambda x: x.message):
-            response.append({'message': msg.dictify(), 'lessons': [x.lesson.dictify() for x in list(lsn)]})
+        for lesson_reg in LessonReg.objects.filter(lesson=lesson, status=LESSON_REG_ACTIVE):
+            # Lesson registrations can be viewed by student with less information
+            info_for_manager = None
+            if role == ROLE_LESSON_MANAGER:
+                lesson_reg_logs = LessonRegLog.objects.filter(lesson_reg=lesson_reg)
+                total = lesson_reg_logs.count()
+                unused = lesson_reg_logs.filter(use_time=None).count()
+                info_for_manager = {'total': total, 'unused': unused}
+            response.append(lesson_reg.dictify(info_for_manager))
 
-        response.sort(key=lambda x: -x['message']['message_id'])
+        # sort student alphabetically
+        response.sort(key=lambda x: x['student']['display_name'] if x['student'] else ' '.join(
+            [x['student_first_name'], x['student_last_name']]))
 
-        return HttpResponse(json.dumps(response, cls=DateEncoder),
-                            content_type='application/json')
+        return pack_json_response(request, response)
+
+
+# GET all reg logs for the given registration
+# POST to create, update and delete reg logs for registration
+@login_required
+@csrf_exempt
+def process_lesson_reg_logs(request):
+    user = request.user
+
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        for log in data:
+            if log['action'] == 'create':
+                lesson_reg = lesson_reg_get(id=log['reg_id'])
+                if not lesson_reg:
+                    return HttpResponseNotFound('Lesson registration does not exist')
+                if role_of_lesson(user, lesson_reg.lesson) != ROLE_LESSON_MANAGER:
+                    return HttpResponseForbidden('No permission to create lesson registration log')
+                LessonRegLog(lesson_reg=lesson_reg,
+                             use_time=log['use_time'],
+                             data=log['data']).save()
+            elif log['action'] == 'update':
+                lesson_reg_log = lesson_reg_log_get(id='rlog_id')
+                if not lesson_reg_log:
+                    return HttpResponseNotFound('Lesson registration log does not exist')
+                if role_of_lesson(user, lesson_reg_log.lesson_reg.lesson) != ROLE_LESSON_MANAGER:
+                    return HttpResponseForbidden('No permission to update lesson registration log')
+                lesson_reg_log.use_time = log['use_time']
+                lesson_reg_log.data = log['data']
+                lesson_reg_log.save()
+            elif log['action'] == 'delete':
+                lesson_reg_log = lesson_reg_log_get(id='rlog_id')
+                if not lesson_reg_log:
+                    return HttpResponseNotFound('Lesson registration log does not exist')
+                if role_of_lesson(user, lesson_reg_log.lesson_reg.lesson) != ROLE_LESSON_MANAGER:
+                    return HttpResponseForbidden('No permission to update lesson registration log')
+                lesson_reg_log.delete()
+            else:
+                return HttpResponseBadRequest('Invalid action')
+
+    else:  # method is GET
+        lesson_reg = lesson_reg_get(id=request.GET['reg_id'])
+        if not lesson_reg:
+            return HttpResponseNotFound('Lesson registration does not exist')
+
+        if role_of_lesson(user, lesson_reg.lesson) == ROLE_LESSON_MANAGER \
+                or (lesson_reg.student and user.username == lesson_reg.student.username):
+            response = [lesson_reg_log.dictify() for lesson_reg_log
+                        in LessonRegLog.objects.filter(lesson_reg=lesson_reg).order_by('id')]
+            return pack_json_response(request, response)
+        else:
+            return HttpResponseForbidden('No permission to view lesson registration logs')
 
 
 @login_required
 @csrf_exempt
-def update_lesson(request):
+def process_lesson_messages(request):
+    user = request.user
+
     if request.method == 'POST':
         data = json.loads(request.body)
-        if 'create' in data:
-            lesson = Lesson(teacher=request.user, **data['create'])
-            lesson.save()
-        elif 'update' in data:
-            entry = data['update']
-            lesson_id = entry.pop('lesson_id')
-            qs = Lesson.objects.filter(id=lesson_id).exclude(status=LESSON_DELETED)
-            if qs.exists():
-                if request.user.username in (qs.first().teacher.username, 'admin'):
-                    qs.update(**entry)
-                else:
-                    return HttpResponseForbidden('No permission to update lesson')
-            else:
-                return HttpResponseNotFound('Lesson does not exist')
-        elif 'delete' in data:
-            lesson_id = data['delete']['lesson_id']
-            qs = Lesson.objects.filter(id=lesson_id).exclude(status=LESSON_DELETED)
-            if qs.exists():
-                if request.user.username in (qs.first().teacher.username, 'admin'):
-                    qs.update(status=LESSON_DELETED)  # mark the lesson as deleted
-                else:
-                    return HttpResponseForbidden('No permission to delete lesson')
-            else:
-                return HttpResponseNotFound('Lesson does not exist')
+        action = data['action']
 
-        return HttpResponse(json.dumps({}),
-                            content_type='application/json')
-    else:
-        return HttpResponseBadRequest('POST is required')
+        if 'create' == action:
 
+            lessons = []
+            for lesson_id in data['lesson_ids']:
+                lesson = lesson_get(lesson_id)
+                if not lesson:
+                    return HttpResponseNotFound('Lesson does not exist')
 
-@login_required
-@csrf_exempt
-def update_lesson_reg_and_logs(request):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        if 'create' in data:
-            entry = data['create']
-            try:
-                lesson = Lesson.objects.get(Q(id=entry['lesson_id']) & ~Q(status=LESSON_DELETED))
-            except Lesson.DoesNotExist:
-                return HttpResponseNotFound('Lesson does not exist')
-            if request.user.username in (lesson.teacher.username, 'admin'):  # enroll
-                if 'student_id' in entry:  # online enroll
-                    try:
-                        student = User.objects.get(id=entry['student_id'])
-                    except User.DoesNotExist:
-                        return HttpResponseNotFound('User does not exist')
-                    try:  # avoid duplicate enrollment
-                        lesson_reg = LessonReg.objects.get(Q(lesson=lesson)
-                                                           & Q(student=student)
-                                                           & ~Q(status=LESSON_REG_DELETED))
-                        if lesson_reg.status == LESSON_REG_PENDING_ENROLL:
-                            return HttpResponseBadRequest(
-                                "A previous enroll request is in effect and pending for student approval")
-                        elif lesson_reg.status == LESSON_REG_PENDING_JOIN:
-                            return HttpResponseBadRequest(
-                                "A previous join request is in effect and pending for teacher approval")
-                        else:
-                            return HttpResponseBadRequest("User is already enrolled")
-                    except LessonReg.DoesNotExist:
-                        pass
-                    lesson_reg = LessonReg(lesson=lesson,
-                                           student=student,
-                                           student_first_name=student.first_name,
-                                           student_last_name=student.last_name,
-                                           data=entry['daytimes'],
-                                           status=LESSON_REG_PENDING_ENROLL)
-                else:  # offline enroll
-                    lesson_reg = LessonReg(lesson=lesson,
-                                           student_first_name=entry['first_name'],
-                                           student_last_name=entry['last_name'],
-                                           data=entry['daytimes'])
-                lesson_reg.save()
+                role = role_of_lesson(user, lesson)
+                if role == ROLE_LESSON_NONE:
+                    return HttpResponseForbidden('No permission to post message')
 
-            else:  # join
-                try:
-                    student = User.objects.get(id=entry['student_id'])
-                except User.DoesNotExist:
-                    return HttpResponseNotFound('User does not exist')
-                try:  # avoid duplicate enrollment
-                    lesson_reg = LessonReg.objects.get(Q(lesson=lesson)
-                                                       & Q(student=student)
-                                                       & ~Q(status=LESSON_REG_DELETED))
-                    if lesson_reg.status == LESSON_REG_PENDING_ENROLL:
-                        return HttpResponseBadRequest(
-                            "A previous enroll request is in effect and pending for student approval")
-                    elif lesson_reg.status == LESSON_REG_PENDING_JOIN:
-                        return HttpResponseBadRequest(
-                            "A previous join request is in effect and pending for teacher approval")
-                    else:
-                        return HttpResponseBadRequest("User is already enrolled")
-                except LessonReg.DoesNotExist:
-                    pass
-                lesson_reg = LessonReg(lesson=lesson,
-                                       student=student,
-                                       student_first_name=student.first_name,
-                                       student_last_name=student.last_name,
-                                       status=LESSON_REG_PENDING_JOIN)
-                lesson_reg.save()
+                lessons.append(lesson)
 
-        elif 'update' in data:
-            entry = data['update']
-            reg_id = entry.pop('reg_id')
-            qs = LessonReg.objects.filter(id=reg_id).exclude(status=LESSON_REG_DELETED)
-            if qs.exists():
-                lesson_reg = qs.first()
-                if request.user.username in (lesson_reg.lesson.teacher.username, 'admin'):
-                    rlogs = entry.pop('rlogs')
-                    qs.update(**entry)
-                    for log in rlogs['create']:
-                        lesson_reg_log = LessonRegLog(lesson_reg=lesson_reg,
-                                                      use_time=log['use_time'],
-                                                      data=log['data'])
-                        lesson_reg_log.save()
-                    for log in rlogs['update']:
-                        rlog_id = log.pop('rlog_id')
-                        qs = LessonRegLog.objects.filter(id=rlog_id)
-                        if qs.exists():
-                            lesson_reg_log = qs.first()
-                            if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
-                                qs.update(**log)
-                            else:
-                                return HttpResponseForbidden('No permission to update lesson registration log')
-                        else:
-                            return HttpResponseNotFound('Lesson registration log does not exist')
-                    for log in rlogs['delete']:
-                        rlog_id = log.pop('rlog_id')
-                        qs = LessonRegLog.objects.filter(id=rlog_id)
-                        if qs.exists():
-                            lesson_reg_log = qs.first()
-                            if request.user.username in (lesson_reg_log.lesson_reg.lesson.teacher.username, 'admin'):
-                                qs.delete()
-                            else:
-                                return HttpResponseForbidden('No permission to delete lesson registration log')
-                        else:
-                            return HttpResponseNotFound('Lesson registration log does not exist')
+            message = Message(sender=user, body=data['body'])
+            message.save()
+            LessonMessage.objects.bulk_create([LessonMessage(lesson=lesson, message=message)
+                                               for lesson in lessons])
 
-                else:
-                    return HttpResponseForbidden('No permission to update lesson registration')
-            else:
-                return HttpResponseNotFound('Lesson registration does not exist')
+        elif 'delete' == action:
+            message = message_get(data['message_id'])
+            if not message:
+                return HttpResponseNotFound('Message does not exist')
+            if user.username not in [message.sender.username, 'admin']:
+                return HttpResponseForbidden('No permission to delete message')
+            message.delete()  # Any entries in LessonMessages are deleted as well by cascade
 
-        elif 'delete' in data:
-            reg_id = data['delete']['reg_id']
-            qs = LessonReg.objects.filter(id=reg_id).exclude(status=LESSON_REG_DELETED)
-            if qs.exists():
-                if request.user.username in (qs.first().lesson.teacher.username, 'admin'):
-                    qs.update(status=LESSON_REG_DELETED)  # mark the lesson registration as deleted
-                else:
-                    return HttpResponseForbidden('No permission to delete lesson registration')
-            else:
-                return HttpResponseNotFound('Lesson registration does not exist')
+        else:
+            return HttpResponseBadRequest('Invalid action')
 
-        return HttpResponse(json.dumps({}),
-                            content_type='application/json')
+        return pack_json_response(request, {})
 
-    else:
-        return HttpResponseBadRequest('POST is required')
+    else:  # method is GET
+        teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user, status=LESSON_ACTIVE)]
+        study_lessons = [lesson_reg.lesson for lesson_reg in
+                         LessonReg.objects.filter(student=user, status=LESSON_REG_ACTIVE)]
+
+        lesson_messages = LessonMessage.objects.filter(
+            lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
+
+        # Find all lessons the message is sent to and group the display of lessons
+        response = []
+        for message, lesson in groupby(lesson_messages, key=lambda lm: lm.message):
+            response.append({'message': message.dictify(),
+                             'lessons': [x.lesson.dictify() for x in list(lesson)]})
+
+        # Sort the final response by decreasing order of message id
+        response.sort(key=lambda entry: -entry['message']['message_id'])
+
+        return pack_json_response(request, response)
 
 
 @csrf_exempt

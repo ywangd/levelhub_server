@@ -149,3 +149,29 @@ class UserMessage(models.Model):
         d = {'user': self.user.dictify(),
              'message': self.message.dictify()}
         return d
+
+
+class LessonRequest(models.Model):
+    sender = models.ForeignKey(User, related_name='lesson_request_sender')
+    receiver = models.ForeignKey(User, related_name='lesson_request_receiver')
+    lesson = models.ForeignKey(Lesson)
+    message = models.CharField(max_length=256)
+    status = models.IntegerField()
+    daytimes = models.CharField(max_length=512)
+    is_new = models.BooleanField(default=True)
+    creation_time = models.DateTimeField(default=utcnow)
+
+    def __unicode__(self):
+        return '%s -> %s [%d]' % (self.sender.username, self.receiver.username, self.status)
+
+    def dictify(self):
+        d = {
+            'sender': self.sender.get_profile().dictify(),
+            'receiver': self.receiver.get_profile().dictify(),
+            'lesson': self.lesson.dictify(),
+            'message': self.message,
+            'status': self.status,
+            'daytimes': self.daytimes,
+            'creation_time': self.creation_time
+        }
+        return d
