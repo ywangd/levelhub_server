@@ -312,13 +312,19 @@ def process_lessons(request):
                                                 'study': query_study_lessons(user)})
 
         elif lesson_category == 'teach':
-            user = user_get(request.GET['user_id'])
-            if not user:
-                return HttpResponseNotFound('User does not exist')
+            # If a user_id is specified, use the user_id, otherwise use
+            # requesting user
+            if 'user_id' in request.GET and request.GET['user_id']:
+                user = user_get(request.GET['user_id'])
+                if not user:
+                    return HttpResponseNotFound('User does not exist')
             return pack_json_response(request, query_teach_lessons(user))
 
         elif lesson_category == 'study':
             return pack_json_response(request, query_study_lessons(request.user))
+
+        else:
+            return HttpResponseBadRequest('Invalid lesson category')
 
 
 # POST to action on a single request
