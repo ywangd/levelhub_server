@@ -362,7 +362,6 @@ def process_lesson_requests(request):
                 LessonRequest(sender=user,
                               receiver=student,
                               lesson=lesson,
-                              message=data['message'],
                               status=REQUEST_ENROLL,
                               is_new=True).save()
 
@@ -408,7 +407,6 @@ def process_lesson_requests(request):
             LessonRequest(sender=user,
                           receiver=lesson_reg.student,
                           lesson=lesson_reg.lesson,
-                          message=data['message'],
                           status=REQUEST_DEROLL,
                           is_new=True).save()
             # This request is a notice only, i.e. the receiver only gets to dismiss the
@@ -430,7 +428,6 @@ def process_lesson_requests(request):
             LessonRequest(sender=user,
                           receiver=teacher,
                           lesson=lesson_reg.lesson,
-                          message=data['message'],
                           status=REQUEST_QUIT,
                           is_new=True).save()
             # This is also a notice only
