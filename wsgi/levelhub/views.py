@@ -386,6 +386,9 @@ def process_lesson_requests(request):
             if lesson_request_get(sender=user, receiver=teacher, lesson=lesson):
                 return HttpResponseBadRequest('Duplicate request')
 
+            if user.username == teacher.username:
+                return HttpResponseBadRequest('You are teacher of the lesson')
+
             LessonRequest(sender=user,
                           receiver=teacher,
                           lesson=lesson,
@@ -451,7 +454,7 @@ def process_lesson_requests(request):
                     lesson_request.status = REQUEST_ENROLL_ACCEPTED
                     LessonReg(lesson=lesson_request.lesson,
                               student=lesson_request.receiver,
-                              daytimes=data['daytimes']).save()
+                              daytimes=lesson_request.daytimes).save()
                 else:
                     lesson_request.status = REQUEST_ENROLL_REJECTED
             elif lesson_request.status == REQUEST_JOIN:

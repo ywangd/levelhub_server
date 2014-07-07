@@ -138,6 +138,7 @@ class LessonMessage(models.Model):
              'message': self.message.dictify()}
         return d
 
+
 class UserMessage(models.Model):
     user = models.ForeignKey(User)  # the recipient user of the message
     message = models.ForeignKey(Message)
@@ -165,13 +166,12 @@ class LessonRequest(models.Model):
         return '%s -> %s [%d]' % (self.sender.username, self.receiver.username, self.status)
 
     def dictify(self):
-        d = {
-            'sender': self.sender.get_profile().dictify(),
-            'receiver': self.receiver.get_profile().dictify(),
-            'lesson': self.lesson.dictify(),
-            'message': self.message,
-            'status': self.status,
-            'daytimes': self.daytimes,
-            'creation_time': self.creation_time
-        }
+        d = {'req_id': self.id,
+             'sender': self.sender.get_profile().dictify(),
+             'receiver': self.receiver.get_profile().dictify(),
+             'lesson': self.lesson.dictify(),
+             'message': self.message,
+             'status': self.status,
+             'daytimes': self.daytimes,
+             'creation_time': self.creation_time}
         return d
