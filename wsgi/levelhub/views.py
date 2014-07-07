@@ -39,7 +39,7 @@ def add_header(func):
     return func_header_added
 
 
-#############################################################################
+# ############################################################################
 # Helper functions
 #############################################################################
 
@@ -80,7 +80,8 @@ def lesson_reg_get(**kwargs):
 
 def lesson_reg_log_get(**kwargs):
     try:
-        return LessonRegLog.objects.get(**kwargs)
+        a = LessonRegLog.objects.get(**kwargs)
+        return a
     except LessonRegLog.DoesNotExist:
         return None
 
@@ -102,7 +103,7 @@ def message_get(message_id):
 def role_of_lesson(user, lesson):
     if user.username in [lesson.teacher.username, 'admin']:
         return ROLE_LESSON_MANAGER
-    elif lesson_reg_get(lesson=lesson, student=user, status=LESSON_REG_ACTIVE):
+    elif lesson_reg_get(lesson=lesson, student=user):
         return ROLE_LESSON_STUDENT
     else:
         return ROLE_LESSON_NONE
@@ -112,10 +113,10 @@ def role_of_lesson(user, lesson):
 def peek_lesson_requests(user):
     # As receiver
     incoming_requests = LessonRequest.objects.filter(
-        receiver=user, is_new=True)
+        receiver=user, is_new=True, status__in=REQUEST_RECEIVER_NOTICE)
     # As sender
     outgoing_requests = LessonRequest.objects.filter(
-        sender=user, is_new=True)
+        sender=user, is_new=True, status__in=REQUEST_SENDER_NOTICE)
 
     return incoming_requests.count() + outgoing_requests.count()
 
@@ -241,7 +242,7 @@ def user_search(request):
     users = User.objects.filter(Q(username__contains=phrase)
                                 | Q(first_name__contains=phrase)
                                 | Q(last_name__contains=phrase)
-                                  & ~Q(username='admin')
+                                & ~Q(username='admin')
                                 & ~Q(username=request.user.username))
     response = []
     for user in users:
@@ -347,12 +348,7 @@ def process_lesson_requests(request):
             if role_of_lesson(user, lesson) != ROLE_LESSON_MANAGER:
                 return HttpResponseForbidden('No permission to enroll student')
 
-            if 'student_first_name' in data and 'student_last_name' in data:  # non-member enroll
-                LessonReg(lesson=lesson,
-                          student_first_name=data['student_first_name'],
-                          student_last_name=data['student_last_name'],
-                          daytimes=data['daytimes']).save()
-            else:  # member enroll
+            if 'student_id' in data:  # member enroll
                 student = user_get(data['student_id'])
                 if not student:
                     return HttpResponseNotFound('User does not exist')
@@ -369,6 +365,12 @@ def process_lesson_requests(request):
                               message=data['message'],
                               status=REQUEST_ENROLL,
                               is_new=True).save()
+
+            else:  # non-member enroll
+                LessonReg(lesson=lesson,
+                          student_first_name=data['first_name'],
+                          student_last_name=data['last_name'],
+                          daytimes=data['daytimes']).save()
 
         elif 'join' == action:
 
@@ -486,14 +488,12 @@ def process_lesson_requests(request):
 
     else:  # method is GET
         # As receiver
-        incoming_requests = LessonRequest.objects.filter(receiver=user).order_by("-id")
-        # As sender
-        outgoing_requests = LessonRequest.objects.filter(sender=user).order_by("-id")
-        # Mark requests as read
-        incoming_requests.filter(is_new=True).update(is_new=False)
-        outgoing_requests.filter(is_new=True).update(is_new=False)
-        response = {'incoming': [req.dictify() for req in incoming_requests],
-                    'outgoing': [req.dictify() for req in outgoing_requests]}
+        all_requests = LessonRequest.objects.filter(
+            (Q(receiver=user) & Q(status__in=REQUEST_RECEIVER_VIEWABLE))
+            | (Q(sender=user) & Q(status__in=REQUEST_SENDER_VIEWABLE))).order_by("-id")
+        # Mark requests as read exclude those sent by the user as requests to enroll or join
+        all_requests.filter(is_new=True).exclude(sender=user, status__in=[REQUEST_ENROLL, REQUEST_JOIN]).update(is_new=False)
+        response = [req.dictify() for req in all_requests]
         return pack_json_response(request, response)
 
 
@@ -568,7 +568,7 @@ def process_lesson_reg_logs(request):
                              use_time=log['use_time'],
                              data=log['data']).save()
             elif log['action'] == 'update':
-                lesson_reg_log = lesson_reg_log_get(id='rlog_id')
+                lesson_reg_log = lesson_reg_log_get(id=log['rlog_id'])
                 if not lesson_reg_log:
                     return HttpResponseNotFound('Lesson registration log does not exist')
                 if role_of_lesson(user, lesson_reg_log.lesson_reg.lesson) != ROLE_LESSON_MANAGER:
@@ -577,7 +577,7 @@ def process_lesson_reg_logs(request):
                 lesson_reg_log.data = log['data']
                 lesson_reg_log.save()
             elif log['action'] == 'delete':
-                lesson_reg_log = lesson_reg_log_get(id='rlog_id')
+                lesson_reg_log = lesson_reg_log_get(id=log['rlog_id'])
                 if not lesson_reg_log:
                     return HttpResponseNotFound('Lesson registration log does not exist')
                 if role_of_lesson(user, lesson_reg_log.lesson_reg.lesson) != ROLE_LESSON_MANAGER:
@@ -585,6 +585,8 @@ def process_lesson_reg_logs(request):
                 lesson_reg_log.delete()
             else:
                 return HttpResponseBadRequest('Invalid action')
+
+        return pack_json_response(request, {})
 
     else:  # method is GET
         lesson_reg = lesson_reg_get(id=request.GET['reg_id'])
@@ -725,6 +727,15 @@ def debug_reset_db(request):
                               description='Got a brain damage or wanna cure one? Join now and you will learn in no '
                                           'time.')
         medic_lesson.save()
+
+        LessonRequest(sender=olaf, receiver=elsa, lesson=magic_lesson,
+                      message='Cold and hot are both extreme. Putting them together just makes sense. I will finally '
+                              'be a happy snowman in summer!',
+                      status=REQUEST_JOIN).save()
+
+        LessonRequest(sender=elsa, receiver=troll, lesson=medic_lesson,
+                      message='I wanna learn how to cure a frozen heart',
+                      status=REQUEST_JOIN).save()
 
         LessonReg.objects.all().delete()
         lesson_reg_1 = LessonReg(lesson=magic_lesson, student=hans)
