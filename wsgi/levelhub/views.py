@@ -701,7 +701,7 @@ def debug_reset_db(request):
                                          "storm rage on. Cold never bothered me anyway.")
         user_profile.save()
         user_profile = UserProfile(user=anna,
-                                   about="I grow up in a castle. My sister and me use to be very close when we were "
+                                   about="I grow up in a castle. My sister and I use to be very close when we were "
                                          "little. But one day she just shut me out and I never know why.")
         user_profile.save()
         user_profile = UserProfile(user=olaf)
@@ -753,6 +753,8 @@ def debug_reset_db(request):
 
         lesson_reg_4 = LessonReg(lesson=love_lesson, student=elsa)
         lesson_reg_4.save()
+
+        LessonReg(lesson=love_lesson, student=anna).save()
 
         LessonRegLog.objects.all().delete()
         lesson_reg_logs_1 = [LessonRegLog(lesson_reg=lesson_reg_1,
