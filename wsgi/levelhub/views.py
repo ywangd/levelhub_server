@@ -362,6 +362,8 @@ def process_lesson_requests(request):
                 LessonRequest(sender=user,
                               receiver=student,
                               lesson=lesson,
+                              message=data['message'],
+                              daytimes=data['daytimes'],
                               status=REQUEST_ENROLL,
                               is_new=True).save()
 
@@ -404,11 +406,12 @@ def process_lesson_requests(request):
             if role_of_lesson(user, lesson_reg.lesson) != ROLE_LESSON_MANAGER:
                 return HttpResponseForbidden('No permission to disenroll student')
 
-            LessonRequest(sender=user,
-                          receiver=lesson_reg.student,
-                          lesson=lesson_reg.lesson,
-                          status=REQUEST_DEROLL,
-                          is_new=True).save()
+            if lesson_reg.student:  # Create notice for members
+                LessonRequest(sender=user,
+                              receiver=lesson_reg.student,
+                              lesson=lesson_reg.lesson,
+                              status=REQUEST_DEROLL,
+                              is_new=True).save()
             # This request is a notice only, i.e. the receiver only gets to dismiss the
             # message without the options for accept or reject
             lesson_reg.status = LESSON_REG_DEROLL
@@ -542,8 +545,8 @@ def process_lesson_regs(request):
             response.append(lesson_reg.dictify(info_for_manager))
 
         # sort student alphabetically
-        response.sort(key=lambda x: x['student']['display_name'] if x['student'] else ' '.join(
-            [x['student_first_name'], x['student_last_name']]))
+        response.sort(key=lambda x: x['student']['display_name'].lower() if x['student'] else ' '.join(
+            [x['student_first_name'], x['student_last_name']]).lower())
 
         return pack_json_response(request, response)
 
