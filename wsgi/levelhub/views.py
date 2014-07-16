@@ -647,12 +647,20 @@ def process_lesson_messages(request):
         return pack_json_response(request, {})
 
     else:  # method is GET
+        msg_id = request.GET['msg_id']
+        action = request.GET['action']
+
         teach_lessons = [lesson for lesson in Lesson.objects.filter(teacher=user, status=LESSON_ACTIVE)]
         study_lessons = [lesson_reg.lesson for lesson_reg in
                          LessonReg.objects.filter(student=user, status=LESSON_REG_ACTIVE)]
 
-        lesson_messages = LessonMessage.objects.filter(
-            lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
+        # Get all newer messages or 15 older messages
+        if action == 'newer':
+            lesson_messages = LessonMessage.objects.filter(message__gt=msg_id,
+                lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')
+        else:
+            lesson_messages = LessonMessage.objects.filter(message__lt=msg_id,
+                lesson__in=[lesson for lesson in chain(teach_lessons, study_lessons)]).order_by('message')[:15]
 
         # Find all lessons the message is sent to and group the display of lessons
         response = []
